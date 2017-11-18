@@ -25,8 +25,12 @@ int
 lock_client::acquire(std::string name)
 {
 	int r;
-	printf("client-%d acquire: lock-%s\n", id, name.c_str());
+	printf("client-%d try acquire: lock-%s\n", id, name.c_str());
 	int ret = cl.call(dst, lock_protocol::acquire, name, id, r);
+	if (r == 0) printf("### client-%d succeed lock-%s\n", id, name.c_str());
+	if (r < 0) printf("###### client-%d failed lock-%s err=%d\n",
+			  id, name.c_str(), r);
+
 	assert (ret == lock_protocol::OK);
 	return 1;
 }
@@ -38,6 +42,10 @@ lock_client::release(std::string name)
 	printf("client-%d release: lock-%s\n", id, name.c_str());
 	int ret = cl.call(dst, lock_protocol::release, name, id, r);
 	assert (ret == lock_protocol::OK);
+	if (r == 0) printf("###client-%d succeed unlock-%s\n",
+			   id, name.c_str());
+	if (r < 0) printf("###### client-%d failed unlock-%s\n",
+			  id, name.c_str());
 	return 1;
 }
 

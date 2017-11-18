@@ -45,7 +45,8 @@ check_grant(std::string name)
   pthread_mutex_lock(&count_mutex);
   int x = name.c_str()[0] & 0xff;
   if(count[x] != 0){
-    fprintf(stderr, "error: server granted %s twice\n", hex(name).c_str());
+    fprintf(stderr, "error: server granted %s %d-times\n",
+	    hex(name).c_str(), count[x]);
     exit(1);
   }
   count[x] += 1;

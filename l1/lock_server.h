@@ -7,23 +7,27 @@
 #include <string>
 #include <map>
 #include <iterator>
+#include <set>
 
 #include "lock_protocol.h"
 #include "lock_client.h"
 #include "rpc.h"
 
-struct lock_info {
+struct named_lock {
 	pthread_mutex_t lock;
-	int locked;
-	int id; // client id
+	pthread_cond_t wait_cond;
+	//int locked;
+	int owner;
+	std::string name;
+	std::set<int> wait_list;
 };
 
 class lock_server {
 
  protected:
   int nacquire;
-  std::map<std::string, struct lock_info *> *lock_of_names;
-  pthread_mutex_t map_lock;
+  std::map<std::string, struct named_lock *> *lock_table;
+  pthread_mutex_t table_lock;
 
  public:
   lock_server();

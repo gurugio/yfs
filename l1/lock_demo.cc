@@ -28,6 +28,7 @@ main(int argc, char *argv[])
   printf("client->acquire\n");
   r = lc->acquire("a");
   printf("client->acquire ret=%x\n", r);
+
   printf("client->acquire\n");
   r = lc->acquire("a");
   printf("client->acquire ret=%x\n", r);
