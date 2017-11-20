@@ -6,36 +6,113 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 
-#include <set>
-
 lock_server::lock_server():
-  nacquire (0)
+	nacquire (0)
 {
+        lock_table = new std::map<lock_protocol::lockid_t,
+				  struct local_lock *>;
+        pthread_mutex_init(&server_lock, NULL);
+}
+
+~lock_server::lock_server()
+{
+	delete lock_table;
 }
 
 lock_protocol::status
 lock_server::stat(int clt, lock_protocol::lockid_t lid, int &r)
 {
-  lock_protocol::status ret = lock_protocol::OK;
-  printf("stat request from clt %d\n", clt);
-  r = nacquire;
-  return ret;
+	lock_protocol::status ret = lock_protocol::OK;
+	struct local_lock *llock;
+	std::map<lock_protocol::lockid_t,
+		 struct local_lock *>::iterator it;
+
+	printf("stat: clt %d\n", clt);
+	pthread_mutex_lock(&server_lock);
+	it = lock_table->find(lid);
+	if (it == lock_table->end())
+		r = lock_protocol::NOENT;
+	else {
+		llock = it->second;
+		r = llock->status;
+	}
+	pthread_mutex_unlock(&server_lock);
+	return ret;
 }
 
 lock_protocol::status
 lock_server::acquire(int clt, lock_protocol::lockid_t lid, int &r)
 {
-  lock_protocol::status ret = lock_protocol::OK;
-  printf("acquire request from clt %d\n", clt);
-  //r = nacquire;
-  return ret;
+	lock_protocol::status ret = lock_protocol::OK;
+	struct local_lock *llock;
+	std::map<lock_protocol::lockid_t,
+		 struct local_lock *>::iterator it;
+
+	printf("acquire: clt-%d lock-%llu\n", clt, lid);
+
+	pthread_mutex_lock(&server_lock);
+	nacquire++;
+
+	it = lock_table->find(lid);
+
+	if (it == lock_table->end()) {
+		llock = new local_lock();
+		llock->status = lock_protocol::FREE;
+		lock_table->insert(std::make_pair(lid, llock));
+	}
+
+	// while (llock->status == lock_protocol::LOCKED) {
+	// 	pthread_cond_wait(&server_wait, &server_lock);
+	// 	// re-read status
+	// 	it = lock_table->find(lid);
+	// 	llock = it->second;
+	// }
+	r = llock->status = lock_protocol::LOCKED;
+	llock->owner = clt;
+	printf("==> lock: clt-%d lock-%llu nacquire=%d\n", clt, lid,
+	       nacquire);
+	pthread_mutex_unlock(&server_lock);
+	return ret;
 }
 
 lock_protocol::status
 lock_server::release(int clt, lock_protocol::lockid_t lid, int &r)
 {
-  lock_protocol::status ret = lock_protocol::OK;
-  printf("release request from clt %d\n", clt);
-  //r = nacquire;
-  return ret;
+	lock_protocol::status ret = lock_protocol::OK;
+	struct local_lock *llock;
+	std::map<lock_protocol::lockid_t,
+		 struct local_lock *>::iterator it;
+
+	printf("release: clt-%d lock-%llu\n", clt, lid);
+
+	pthread_mutex_lock(&server_lock);
+
+	printf("%d\n", __LINE__);
+	it = lock_table->find(lid);
+	if (it == lock_table->end()) {
+		r = lock_protocol::NOENT;
+		goto unlock;
+	}
+	llock = it->second;
+	printf("%d\n", __LINE__);
+
+	if (llock->status != lock_protocol::LOCKED) {
+		r = lock_protocol::NOENT;
+		goto unlock;
+	}
+	printf("%d\n", __LINE__);
+	
+	r = llock->status = lock_protocol::FREE;
+	llock->owner = 0;
+	printf("%d\n", __LINE__);
+
+	nacquire--;
+	// if (nacquire > 0)
+	// 	pthread_cond_signal(&server_wait);
+
+	printf("==> unlock: clt-%d lock-%llu nacquire=%d\n",
+	       clt, lid, nacquire);
+unlock:
+	pthread_mutex_unlock(&server_lock);
+	return ret;
 }

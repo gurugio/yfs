@@ -12,29 +12,33 @@
 #include "lock_client.h"
 #include "rpc.h"
 
-struct named_lock {
-        pthread_mutex_t lock;
-        pthread_cond_t wait_cond;
-        //int locked;
+struct local_lock {
+        /* pthread_mutex_t lock; */
+        /* pthread_cond_t wait_cond; */
+        int status;
         int owner;
-        std::string name;
-        std::set<int> wait_list;
+        /* std::string name; */
+        /* std::set<int> wait_list; */
 };
 
-
 class lock_server {
-
- protected:
-  int nacquire;
-  std::map<std::string, struct named_lock *> *lock_table;
-  pthread_mutex_t table_lock;
-
- public:
-  lock_server();
-  ~lock_server() {};
-  lock_protocol::status stat(int clt, lock_protocol::lockid_t lid, int &);
-  lock_protocol::status acquire(int clt, lock_protocol::lockid_t lid, int &);
-  lock_protocol::status release(int clt, lock_protocol::lockid_t lid, int &);
+protected:
+	int nacquire;
+	std::map<lock_protocol::lockid_t, struct local_lock *> *lock_table;
+	pthread_mutex_t server_lock;
+	pthread_cond_t  server_wait;
+public:
+	lock_server();
+	~lock_server() {};
+	lock_protocol::status stat(int clt,
+				   lock_protocol::lockid_t lid,
+				   int &);
+	lock_protocol::status acquire(int clt,
+				      lock_protocol::lockid_t lid,
+				      int &);
+	lock_protocol::status release(int clt,
+				      lock_protocol::lockid_t lid,
+				      int &);
 };
 
 #endif 
