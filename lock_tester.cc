@@ -1,69 +1,54 @@
 //
 // Lock server tester
 //
-#include <stdio.h>
-#include <unistd.h>
 
 #include "lock_protocol.h"
 #include "lock_client.h"
-#include "rpc/rpc.h"
+#include "rpc.h"
+#include "jsl_log.h"
 #include <arpa/inet.h>
+#include <vector>
+#include <stdlib.h>
+#include <stdio.h>
+#include "lang/verify.h"
 
-int nt = 10;
-struct sockaddr_in dst;
+// must be >= 2
+int nt = 6; //XXX: lab1's rpc handlers are blocking. Since rpcs uses a thread pool of 10 threads, we cannot test more than 10 blocking rpc.
+std::string dst;
 lock_client **lc = new lock_client * [nt];
-std::string a = std::string("a");
-std::string b = std::string("b");
-std::string c = std::string("c");
+lock_protocol::lockid_t a = 1;
+lock_protocol::lockid_t b = 2;
+lock_protocol::lockid_t c = 3;
 
 // check_grant() and check_release() check that the lock server
 // doesn't grant the same lock to both clients.
 // it assumes that lock names are distinct in the first byte.
-int count[256];
+int ct[256];
 pthread_mutex_t count_mutex;
 
-// convert a bit-string to a hex string for debug printouts.
-std::string
-hex(std::string s)
+void
+check_grant(lock_protocol::lockid_t lid)
 {
-  char buf[64];
-  unsigned int len = s.length();
-  const char *p = s.c_str();
-  unsigned int i;
-
-  buf[0] = '\0';
-  for(i = 0; i < len && i*2+1 < sizeof(buf); i++){
-    sprintf(buf + (i * 2), "%02x", p[i] & 0xff);
+  ScopedLock ml(&count_mutex);
+  int x = lid & 0xff;
+  if(ct[x] != 0){
+    fprintf(stderr, "error: server granted %016llx twice\n", lid);
+    fprintf(stdout, "error: server granted %016llx twice\n", lid);
+    exit(1);
   }
-  
-  return std::string(buf);
+  ct[x] += 1;
 }
 
 void
-check_grant(std::string name)
+check_release(lock_protocol::lockid_t lid)
 {
-  pthread_mutex_lock(&count_mutex);
-  int x = name.c_str()[0] & 0xff;
-  if(count[x] != 0){
-    fprintf(stderr, "error: server granted %s twice\n", hex(name).c_str());
+  ScopedLock ml(&count_mutex);
+  int x = lid & 0xff;
+  if(ct[x] != 1){
+    fprintf(stderr, "error: client released un-held lock %016llx\n",  lid);
     exit(1);
   }
-  count[x] += 1;
-  pthread_mutex_unlock(&count_mutex);
-}
-
-void
-check_release(std::string name)
-{
-  pthread_mutex_lock(&count_mutex);
-  int x = name.c_str()[0] & 0xff;
-  if(count[x] != 1){
-    fprintf(stderr, "error: client released un-held lock %s\n", 
-	    hex(name).c_str());
-    exit(1);
-  }
-  count[x] -= 1;
-  pthread_mutex_unlock(&count_mutex);
+  ct[x] -= 1;
 }
 
 void
@@ -79,7 +64,7 @@ test1(void)
     lc[0]->release(a);
     check_release(a);
 
-    printf ("acquire a acquire b release b releasea \n");
+    printf ("acquire a acquire b release b release a\n");
     lc[0]->acquire(a);
     check_grant(a);
     lc[0]->acquire(b);
@@ -97,12 +82,13 @@ test2(void *x)
 
   printf ("test2: client %d acquire a release a\n", i);
   lc[i]->acquire(a);
-  printf ("test2: client %d sleep\n", i);
+  printf ("test2: client %d acquire done\n", i);
   check_grant(a);
   sleep(1);
   printf ("test2: client %d release\n", i);
   check_release(a);
   lc[i]->release(a);
+  printf ("test2: client %d release done\n", i);
   return 0;
 }
 
@@ -127,11 +113,11 @@ test4(void *x)
 {
   int i = * (int *) x;
 
-  printf ("test4: client %d acquire a release a concurrent; same clnt\n", i);
+  printf ("test4: thread %d acquire a release a concurrent; same clnt\n", i);
   for (int j = 0; j < 10; j++) {
     lc[0]->acquire(a);
     check_grant(a);
-    printf ("test4: client %d got lock\n", i);
+    printf ("test4: thread %d on client 0 got lock\n", i);
     check_release(a);
     lc[0]->release(a);
   }
@@ -161,27 +147,30 @@ main(int argc, char *argv[])
 {
     int r;
     pthread_t th[nt];
+    int test = 0;
 
     setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stderr, NULL, _IONBF, 0);
+    srandom(getpid());
 
-    if(argc != 2 && argc != 3){
+    //jsl_set_debug(2);
+
+    if(argc < 2) {
       fprintf(stderr, "Usage: %s [host:]port [test]\n", argv[0]);
       exit(1);
     }
-    
-    make_sockaddr(argv[1], &dst);
 
-    int test = 0;
-    if(argc == 3) {
+    dst = argv[1]; 
+
+    if (argc > 2) {
       test = atoi(argv[2]);
       if(test < 1 || test > 5){
-	printf("Test number must be between 1 and 5\n");
-	exit(1);
+        printf("Test number must be between 1 and 5\n");
+        exit(1);
       }
     }
 
-    assert(pthread_mutex_init(&count_mutex, NULL) == 0);
-
+    VERIFY(pthread_mutex_init(&count_mutex, NULL) == 0);
     printf("simple lock client\n");
     for (int i = 0; i < nt; i++) lc[i] = new lock_client(dst);
 
@@ -194,7 +183,7 @@ main(int argc, char *argv[])
       for (int i = 0; i < nt; i++) {
 	int *a = new int (i);
 	r = pthread_create(&th[i], NULL, test2, (void *) a);
-	assert (r == 0);
+	VERIFY (r == 0);
       }
       for (int i = 0; i < nt; i++) {
 	pthread_join(th[i], NULL);
@@ -208,7 +197,7 @@ main(int argc, char *argv[])
       for (int i = 0; i < nt; i++) {
 	int *a = new int (i);
 	r = pthread_create(&th[i], NULL, test3, (void *) a);
-	assert (r == 0);
+	VERIFY (r == 0);
       }
       for (int i = 0; i < nt; i++) {
 	pthread_join(th[i], NULL);
@@ -222,7 +211,7 @@ main(int argc, char *argv[])
       for (int i = 0; i < 2; i++) {
 	int *a = new int (i);
 	r = pthread_create(&th[i], NULL, test4, (void *) a);
-	assert (r == 0);
+	VERIFY (r == 0);
       }
       for (int i = 0; i < 2; i++) {
 	pthread_join(th[i], NULL);
@@ -234,12 +223,12 @@ main(int argc, char *argv[])
       
       // test 5
       
-      for (int i = 0; i < 10; i++) {
+      for (int i = 0; i < nt; i++) {
 	int *a = new int (i);
 	r = pthread_create(&th[i], NULL, test5, (void *) a);
-	assert (r == 0);
+	VERIFY (r == 0);
       }
-      for (int i = 0; i < 10; i++) {
+      for (int i = 0; i < nt; i++) {
 	pthread_join(th[i], NULL);
       }
     }

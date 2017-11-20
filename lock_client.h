@@ -6,23 +6,19 @@
 #include <string>
 #include "lock_protocol.h"
 #include "rpc.h"
+#include <vector>
 
 // Client interface to the lock server
 class lock_client {
-
  protected:
-  struct sockaddr_in dst;
-  rpcc cl;
-  int id;
+  rpcc *cl;
  public:
-  lock_client(struct sockaddr_in dst);
+  lock_client(std::string d);
   virtual ~lock_client() {};
-  virtual lock_protocol::status acquire(std::string);
-  virtual lock_protocol::status release(std::string);
-  virtual lock_protocol::status stat(std::string);
+  virtual lock_protocol::status acquire(lock_protocol::lockid_t);
+  virtual lock_protocol::status release(lock_protocol::lockid_t);
+  virtual lock_protocol::status stat(lock_protocol::lockid_t);
 };
-
-
 
 
 #endif 
