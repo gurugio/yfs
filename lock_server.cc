@@ -12,6 +12,7 @@ lock_server::lock_server():
         lock_table = new std::map<lock_protocol::lockid_t,
 				  struct local_lock *>;
         pthread_mutex_init(&server_lock, NULL);
+	pthread_cond_init(&server_wait, NULL);
 }
 
 lock_server::~lock_server()
@@ -101,12 +102,14 @@ lock_server::release(int clt, lock_protocol::lockid_t lid, int &r)
 
 	it = lock_table->find(lid);
 	if (it == lock_table->end()) {
+		printf("ERROR: no such lock\n");
 		r = lock_protocol::NOENT;
 		goto unlock;
 	}
 
 	llock = it->second;
 	if (llock->status != lock_protocol::LOCKED) {
+		printf("ERROR: already released\n");
 		r = lock_protocol::NOENT;
 		goto unlock;
 	}
@@ -115,8 +118,7 @@ lock_server::release(int clt, lock_protocol::lockid_t lid, int &r)
 	llock->owner = 0;
 
 	nacquire--;
-	if (nacquire > 0)
-		pthread_cond_signal(&server_wait);
+	pthread_cond_signal(&server_wait);
 
 	printf("==> unlock: clt-%d lock-%llu nacquire=%d\n",
 	       clt, lid, nacquire);
