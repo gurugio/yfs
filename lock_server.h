@@ -29,7 +29,7 @@ protected:
 	pthread_cond_t  server_wait;
 public:
 	lock_server();
-	~lock_server() {};
+	~lock_server(); // free local_lock objects and lock_table
 	lock_protocol::status stat(int clt,
 				   lock_protocol::lockid_t lid,
 				   int &);

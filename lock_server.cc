@@ -14,8 +14,18 @@ lock_server::lock_server():
         pthread_mutex_init(&server_lock, NULL);
 }
 
-~lock_server::lock_server()
+lock_server::~lock_server()
 {
+	std::map<lock_protocol::lockid_t,
+		 struct local_lock *>::iterator it;
+
+	it = lock_table->begin();
+
+	while (it != lock_table->end()) {
+		delete it->second;
+		lock_table->erase(it);
+	}
+	
 	delete lock_table;
 }
 
@@ -61,12 +71,14 @@ lock_server::acquire(int clt, lock_protocol::lockid_t lid, int &r)
 		lock_table->insert(std::make_pair(lid, llock));
 	}
 
-	// while (llock->status == lock_protocol::LOCKED) {
-	// 	pthread_cond_wait(&server_wait, &server_lock);
-	// 	// re-read status
-	// 	it = lock_table->find(lid);
-	// 	llock = it->second;
-	// }
+	it = lock_table->find(lid);
+	llock = it->second;
+	while (llock->status == lock_protocol::LOCKED) {
+		pthread_cond_wait(&server_wait, &server_lock);
+		// re-read status
+		it = lock_table->find(lid);
+		llock = it->second;
+	}
 	r = llock->status = lock_protocol::LOCKED;
 	llock->owner = clt;
 	printf("==> lock: clt-%d lock-%llu nacquire=%d\n", clt, lid,
@@ -87,28 +99,24 @@ lock_server::release(int clt, lock_protocol::lockid_t lid, int &r)
 
 	pthread_mutex_lock(&server_lock);
 
-	printf("%d\n", __LINE__);
 	it = lock_table->find(lid);
 	if (it == lock_table->end()) {
 		r = lock_protocol::NOENT;
 		goto unlock;
 	}
-	llock = it->second;
-	printf("%d\n", __LINE__);
 
+	llock = it->second;
 	if (llock->status != lock_protocol::LOCKED) {
 		r = lock_protocol::NOENT;
 		goto unlock;
 	}
-	printf("%d\n", __LINE__);
 	
 	r = llock->status = lock_protocol::FREE;
 	llock->owner = 0;
-	printf("%d\n", __LINE__);
 
 	nacquire--;
-	// if (nacquire > 0)
-	// 	pthread_cond_signal(&server_wait);
+	if (nacquire > 0)
+		pthread_cond_signal(&server_wait);
 
 	printf("==> unlock: clt-%d lock-%llu nacquire=%d\n",
 	       clt, lid, nacquire);
