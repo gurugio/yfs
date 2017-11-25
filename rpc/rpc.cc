@@ -662,9 +662,39 @@ rpcs::checkduplicate_and_update(unsigned int clt_nonce, unsigned int xid,
 		unsigned int xid_rep, char **b, int *sz)
 {
 	ScopedLock rwl(&reply_window_m_);
-
         // You fill this in for Lab 1.
-	return NEW;
+	rpcstate_t ret = NEW;
+	std::map<unsigned int,std::list<reply_t> >::iterator clt;
+	std::list<reply_t>::iterator reply_list;
+
+	// if duplicated xid and cb_present == true
+	//     *b = reply_t.buf, *sz = reply_t.sz
+	//     return DONE
+	// if duplicated xid and cb_present == false
+	//     return INPROGRESS
+	// if xid < xid_rep
+	//     loop each reply_t and remove buf of xid < xid_rep
+	//     return FORGOTTEN
+
+	// client is always stored before calling this
+	clt = reply_window_.find(clt_nonce);
+
+	reply_list = clt->second.find(xid);
+	if (reply_list == clt->second.end()) {
+
+		ret = NEW;
+	} else if (reply_list->second.cb_present == false) {
+
+		ret = INPROGRESS;
+	} else if (reply_list->second.cb_present == true) {
+
+		ret = DONE;
+	}
+
+	if (xid < xid_rep) {
+		ret = FORGOTTEN;
+	}
+	return ret;
 }
 
 // rpcs::dispatch calls add_reply when it is sending a reply to an RPC,
@@ -678,6 +708,9 @@ rpcs::add_reply(unsigned int clt_nonce, unsigned int xid,
 {
 	ScopedLock rwl(&reply_window_m_);
         // You fill this in for Lab 1.
+	// save the result in reply_window_
+	std::map<unsigned int,std::list<reply_t> >::iterator clt;
+	clt = reply_window_.find();
 }
 
 void
