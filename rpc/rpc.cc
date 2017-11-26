@@ -664,8 +664,9 @@ rpcs::checkduplicate_and_update(unsigned int clt_nonce, unsigned int xid,
 	ScopedLock rwl(&reply_window_m_);
         // You fill this in for Lab 1.
 	rpcstate_t ret = NEW;
-	std::map<unsigned int,std::list<reply_t> >::iterator clt;
-	std::list<reply_t>::iterator reply_list;
+	std::map<unsigned int, std::list<reply_t> >::iterator clt_it;
+	std::list<reply_t> rep_list;
+	std::list<reply_t>::iterator list_iter;
 
 	// if duplicated xid and cb_present == true
 	//     *b = reply_t.buf, *sz = reply_t.sz
@@ -677,23 +678,28 @@ rpcs::checkduplicate_and_update(unsigned int clt_nonce, unsigned int xid,
 	//     return FORGOTTEN
 
 	// client is always stored before calling this
-	clt = reply_window_.find(clt_nonce);
-
-	reply_list = clt->second.find(xid);
-	if (reply_list == clt->second.end()) {
-
+	clt_it = reply_window_.find(clt_nonce);
+	rep_list = clt_it->second;
+	
+	for(list_iter = rep_list.begin();
+	    list_iter != rep_list.end();
+	    list_iter++) {
+		if (list_iter->xid == xid)
+			break;
+	}
+		
+	if (list_iter == rep_list.end()) {
 		ret = NEW;
-	} else if (reply_list->second.cb_present == false) {
+	} else if (list_iter->cb_present == false) {
 
 		ret = INPROGRESS;
-	} else if (reply_list->second.cb_present == true) {
+	} else if (list_iter->cb_present == true) {
 
 		ret = DONE;
-	}
-
-	if (xid < xid_rep) {
+	} else if (xid < xid_rep) {
 		ret = FORGOTTEN;
 	}
+
 	return ret;
 }
 
@@ -709,8 +715,9 @@ rpcs::add_reply(unsigned int clt_nonce, unsigned int xid,
 	ScopedLock rwl(&reply_window_m_);
         // You fill this in for Lab 1.
 	// save the result in reply_window_
-	std::map<unsigned int,std::list<reply_t> >::iterator clt;
-	clt = reply_window_.find();
+	// std::map<unsigned int,std::list<reply_t> >::iterator clt;
+	// std::list<reply_y> 
+	// clt = reply_window_.find();
 }
 
 void
