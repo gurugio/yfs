@@ -668,19 +668,22 @@ rpcs::checkduplicate_and_update(unsigned int clt_nonce, unsigned int xid,
 	std::list<reply_t> rep_list;
 	std::list<reply_t>::iterator list_iter;
 
-	// if duplicated xid and cb_present == true
-	//     *b = reply_t.buf, *sz = reply_t.sz
-	//     return DONE
-	// if duplicated xid and cb_present == false
-	//     return INPROGRESS
-	// if xid < xid_rep
-	//     loop each reply_t and remove buf of xid < xid_rep
-	//     return FORGOTTEN
+	// printf("### check: clt=%d xid=%d xid_rep=%d\n",
+	//        clt_nonce, xid, xid_rep);
 
 	// client is always stored before calling this
 	clt_it = reply_window_.find(clt_nonce);
 	rep_list = clt_it->second;
 	
+	for(list_iter = rep_list.begin();
+	    list_iter != rep_list.end();
+	    list_iter++) {
+		if (list_iter->xid <= xid_rep) {
+			free(list_iter->buf);
+			list_iter->cb_present = false;
+		}
+	}
+
 	for(list_iter = rep_list.begin();
 	    list_iter != rep_list.end();
 	    list_iter++) {
@@ -691,15 +694,14 @@ rpcs::checkduplicate_and_update(unsigned int clt_nonce, unsigned int xid,
 	if (list_iter == rep_list.end()) {
 		ret = NEW;
 	} else if (list_iter->cb_present == false) {
-
 		ret = INPROGRESS;
 	} else if (list_iter->cb_present == true) {
-
 		ret = DONE;
 	} else if (xid < xid_rep) {
 		ret = FORGOTTEN;
 	}
 
+	// printf("### check: ret=%d\n", ret);
 	return ret;
 }
 
@@ -714,10 +716,20 @@ rpcs::add_reply(unsigned int clt_nonce, unsigned int xid,
 {
 	ScopedLock rwl(&reply_window_m_);
         // You fill this in for Lab 1.
-	// save the result in reply_window_
-	// std::map<unsigned int,std::list<reply_t> >::iterator clt;
-	// std::list<reply_y> 
-	// clt = reply_window_.find();
+	std::map<unsigned int,std::list<reply_t> >::iterator clt_it;
+	std::list<reply_t> rep_list;
+	//reply_t *rep = new reply_t(xid);
+	reply_t rep(xid);
+
+	// printf("###### add: clt=%d xid=%d\n", clt_nonce, xid);
+
+	rep.cb_present = true;
+	rep.buf = b;
+	rep.sz = sz;
+
+	clt_it = reply_window_.find(clt_nonce);
+	rep_list = clt_it->second;
+	rep_list.push_back(rep);
 }
 
 void
