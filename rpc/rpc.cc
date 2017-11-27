@@ -680,6 +680,8 @@ rpcs::checkduplicate_and_update(unsigned int clt_nonce, unsigned int xid,
 	    list_iter++) {
 		if (list_iter->xid <= xid_rep) {
 			free(list_iter->buf);
+			list_iter->buf = NULL;
+			list_iter->sz = 0;
 			list_iter->cb_present = false;
 		}
 	}
@@ -693,7 +695,8 @@ rpcs::checkduplicate_and_update(unsigned int clt_nonce, unsigned int xid,
 		
 	if (list_iter == rep_list.end()) {
 		reply_t *rep = new reply_t(xid);
-		// TODO: add rep into the client's list
+		printf("### new rep: cli=%d xid=%d\n", clt_nonce, xid);
+		rep_list.push_back(*rep);
 		ret = NEW;
 	} else if (list_iter->cb_present == false) {
 		ret = INPROGRESS;
@@ -721,14 +724,15 @@ rpcs::add_reply(unsigned int clt_nonce, unsigned int xid,
 	std::map<unsigned int,std::list<reply_t> >::iterator clt_it;
 	std::list<reply_t>::iterator list_it;
 
-
-	//printf("###### add: clt=%d xid=%d\n", clt_nonce, xid);
+	printf("###### add buf: clt=%d xid=%d\n", clt_nonce, xid);
 
 	clt_it = reply_window_.find(clt_nonce);
 	for (list_it = clt_it->second.begin();
 	     list_it != clt_it->second.end();
 	     list_it++) {
 		if (list_it->xid == xid) {
+			printf("###### found: clt=%d xid=%d %p\n",
+			       clt_nonce, xid, b);
 			list_it->cb_present = true;
 			list_it->buf = b;
 			list_it->sz = sz;
