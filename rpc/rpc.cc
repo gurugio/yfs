@@ -692,6 +692,8 @@ rpcs::checkduplicate_and_update(unsigned int clt_nonce, unsigned int xid,
 	}
 		
 	if (list_iter == rep_list.end()) {
+		reply_t *rep = new reply_t(xid);
+		// TODO: add rep into the client's list
 		ret = NEW;
 	} else if (list_iter->cb_present == false) {
 		ret = INPROGRESS;
@@ -701,7 +703,7 @@ rpcs::checkduplicate_and_update(unsigned int clt_nonce, unsigned int xid,
 		ret = FORGOTTEN;
 	}
 
-	// printf("### check: ret=%d\n", ret);
+	//printf("### check: ret=%d\n", ret);
 	return ret;
 }
 
@@ -717,19 +719,22 @@ rpcs::add_reply(unsigned int clt_nonce, unsigned int xid,
 	ScopedLock rwl(&reply_window_m_);
         // You fill this in for Lab 1.
 	std::map<unsigned int,std::list<reply_t> >::iterator clt_it;
-	std::list<reply_t> rep_list;
-	//reply_t *rep = new reply_t(xid);
-	reply_t rep(xid);
+	std::list<reply_t>::iterator list_it;
 
-	// printf("###### add: clt=%d xid=%d\n", clt_nonce, xid);
 
-	rep.cb_present = true;
-	rep.buf = b;
-	rep.sz = sz;
+	//printf("###### add: clt=%d xid=%d\n", clt_nonce, xid);
 
 	clt_it = reply_window_.find(clt_nonce);
-	rep_list = clt_it->second;
-	rep_list.push_back(rep);
+	for (list_it = clt_it->second.begin();
+	     list_it != clt_it->second.end();
+	     list_it++) {
+		if (list_it->xid == xid) {
+			list_it->cb_present = true;
+			list_it->buf = b;
+			list_it->sz = sz;
+			break;
+		}
+	}
 }
 
 void
