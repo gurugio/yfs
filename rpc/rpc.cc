@@ -664,17 +664,13 @@ rpcs::checkduplicate_and_update(unsigned int clt_nonce, unsigned int xid,
 	ScopedLock rwl(&reply_window_m_);
         // You fill this in for Lab 1.
 	rpcstate_t ret = NEW;
-	std::map<unsigned int, std::list<reply_t> >::iterator clt_it;
+	std::map<unsigned int, std::list<reply_t> >::iterator map_it;
 	std::list<reply_t> rep_list;
 	std::list<reply_t>::iterator list_iter;
 
-	// printf("### check: clt=%d xid=%d xid_rep=%d\n",
-	//        clt_nonce, xid, xid_rep);
-
 	// client is always stored before calling this
-	clt_it = reply_window_.find(clt_nonce);
-	rep_list = clt_it->second;
-	
+	rep_list = reply_window_[clt_nonce];
+
 	for(list_iter = rep_list.begin();
 	    list_iter != rep_list.end();
 	    list_iter++) {
@@ -695,18 +691,21 @@ rpcs::checkduplicate_and_update(unsigned int clt_nonce, unsigned int xid,
 		
 	if (list_iter == rep_list.end()) {
 		reply_t *rep = new reply_t(xid);
-		printf("### new rep: cli=%d xid=%d\n", clt_nonce, xid);
 		rep_list.push_back(*rep);
+		reply_window_[clt_nonce] = rep_list;
 		ret = NEW;
-	} else if (list_iter->cb_present == false) {
-		ret = INPROGRESS;
 	} else if (list_iter->cb_present == true) {
+		*b = list_iter->buf;
+		*sz = list_iter->sz;
 		ret = DONE;
-	} else if (xid < xid_rep) {
+	} else if (list_iter->cb_present == false && xid > xid_rep) {
+		ret = INPROGRESS;
+	} else if (list_iter->cb_present == false && xid <= xid_rep) {
 		ret = FORGOTTEN;
+	} else {
+		assert(0);
 	}
 
-	//printf("### check: ret=%d\n", ret);
 	return ret;
 }
 
@@ -721,24 +720,24 @@ rpcs::add_reply(unsigned int clt_nonce, unsigned int xid,
 {
 	ScopedLock rwl(&reply_window_m_);
         // You fill this in for Lab 1.
-	std::map<unsigned int,std::list<reply_t> >::iterator clt_it;
+	std::map<unsigned int,std::list<reply_t> >::iterator map_it;
+	std::list<reply_t> rep_list;
 	std::list<reply_t>::iterator list_it;
 
-	printf("###### add buf: clt=%d xid=%d\n", clt_nonce, xid);
+	rep_list = reply_window_[clt_nonce];
 
-	clt_it = reply_window_.find(clt_nonce);
-	for (list_it = clt_it->second.begin();
-	     list_it != clt_it->second.end();
+	for (list_it = rep_list.begin();
+	     list_it != rep_list.end();
 	     list_it++) {
 		if (list_it->xid == xid) {
-			printf("###### found: clt=%d xid=%d %p\n",
-			       clt_nonce, xid, b);
+			assert(list_it->cb_present == false && list_it->buf == NULL);
 			list_it->cb_present = true;
 			list_it->buf = b;
 			list_it->sz = sz;
 			break;
 		}
 	}
+	reply_window_[clt_nonce] = rep_list;
 }
 
 void
