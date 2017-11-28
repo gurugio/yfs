@@ -1,0 +1,631 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<!-- saved from url=(0061)https://pdos.csail.mit.edu/archive/6.824-2012/labs/lab-2.html -->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<link rel="StyleSheet" href="./6.824 Lab 2_ Basic File Server_files/style.css" type="text/css">
+<title>6.824 Lab 2: Basic File Server</title>
+</head>
+<body>
+<div align="center">
+<h2><a href="https://pdos.csail.mit.edu/archive/6.824-2012/index.html">6.824</a> - Spring 2012</h2>
+</div>
+
+<div align="center">
+<h1>6.824 Lab 2: Basic File Server</h1>
+</div>
+
+
+<div align="center">
+<h3>Due: Friday, February 24th, 5:00pm.</h3>
+</div>
+
+<h3>Introduction</h3>
+
+In this lab, you will start your file system implementation by
+getting the following FUSE operations to work:
+<ul>
+<li> CREATE/MKNOD, LOOKUP, and READDIR 
+</li><li> SETATTR, WRITE and READ
+</li></ul>
+
+
+Recall that YFS has the following architecture.
+<p>
+</p><center><img src="./6.824 Lab 2_ Basic File Server_files/yfs.jpg"></center>
+<p>
+</p><p>
+We provide you with skeleton code for both the YFS and extent server modules above.  
+
+</p><p>
+The YFS module implements the core file system logic.
+This module runs as a single process called <tt>yfs_client</tt> that supports 
+a mountpoint on the local host.  The code skeleton for this module consists of two pieces:
+
+</p><ul>
+
+<li><b>The FUSE interface,</b> in
+<tt>fuse.cc</tt>. It translates FUSE operations from
+the FUSE kernel modules into YFS client calls.  We
+provide you with much of the code needed to register with FUSE and receive
+FUSE operations; you will be mostly responsible for 
+modifying <tt>fuse.cc</tt> to call the appropriate
+methods on the <tt>yfs_client</tt> class and reply
+back over the FUSE interface.
+
+</li><li><b>The YFS client,</b> in <tt>yfs_client.{cc,h}</tt>. 
+The YFS client implements the file system logic,
+using the lock and extent servers to help it.
+For example, when creating a new file, your yfs_client will add directory entries to 
+a directory block in the extent server.
+It is called a client, rather than a file server, because of its
+relationship to the lock and extent servers.
+
+</li></ul>
+
+<p>
+The extent server stores
+all the data representing your 
+filesystem, much like a hard disk in an ordinary file system.
+In later labs, you will run YFS clients on multiple hosts,
+all of them talking to the same extent server;
+the desired effect is that all the hosts see and share the same file system.
+The only way the multiple YFS clients can share data is through
+the extent server. The extent server code skeleton consists of 
+two pieces:
+</p><ul>
+<li><b>Extent client,</b> in <tt>extent_client.{cc,h}</tt>.
+This is a wrapper class for communicationg with extent server using RPCs.
+</li><li><b>Extent server,</b> in <tt>extent_server.{cc,h}</tt> and 
+<tt>extent_smain.cc</tt>.  The extent server manages a simple key-value store.
+It requires integers of type
+<tt>extent_protocol::extentid_t</tt>
+for keys, and stores string values
+(<tt>std::string</tt>), without interpreting the contents of those
+strings.  It also stores an "attribute" for key/value pair.
+Your extent server should support put(key,value), get(key),
+getattr(key), and remove(key) RPCs.
+</li></ul>
+
+<h3>Getting started</h3>
+
+
+First, use a computer with FUSE and the FUSE libraries installed (see
+the <a href="https://pdos.csail.mit.edu/archive/6.824-2012/labs/index.html#fuse">Lab Overview</a> for details).
+
+<p>
+Merge your solution to Lab 1 with the new code we
+supply for Lab 2. To do this, first commit your solution to Lab 1:
+
+</p><pre>% <b>cd lab</b>
+% <b>git commit -am 'my solution to lab1'</b>
+Created commit 254dac5: my solution to lab1
+ 3 files changed, 31 insertions(+), 6 deletions(-)
+</pre>
+
+Before you commit, you will need to explicitly
+<tt><nobr>git add</nobr></tt> any new files you
+added. Run <tt><nobr>git status</nobr></tt> to show all the files that
+were added or changed.
+
+<p>
+Next, fetch the latest version of the course repository, then create a
+local branch called <tt>lab2</tt> based on our lab2 branch,
+<tt>origin/lab2</tt>:
+
+</p><pre>% <b>git pull</b>
+remote: Generating pack...
+[...]
+% <b>git checkout -b lab2 origin/lab2</b>
+Branch lab2 set up to track remote branch refs/remotes/origin/lab2.
+Switched to a new branch "lab2"
+%
+</pre>
+
+<p>
+The <tt><nobr>git checkout -b</nobr></tt> command shown above actually
+does two things: it first creates a local branch <tt>lab2</tt> that is
+based on the <tt>origin/lab2</tt> branch provided by the course staff,
+and second, it changes the contents of your <tt>lab</tt> directory to
+reflect the files stored on the <tt>lab2</tt> branch.  Git allows
+switching between existing branches using <tt><nobr>git
+checkout <i>branch-name</i></nobr></tt>, though you should commit any
+outstanding changes on one branch before switching to a different one.
+
+</p><p>
+You will now need to merge the changes you made in your <tt>lab1</tt>
+branch into the <tt>lab2</tt> branch, as follows:
+
+</p><pre>% <b>git merge lab1</b>
+</pre>
+
+Git may not be able to figure out how to merge your
+changes with the new lab assignment (e.g., if you modified some of the
+code that the second lab assignment changes).  In that case,
+<tt><nobr>git merge</nobr></tt> will tell you which files
+have <emph>conflicts</emph>, and you should first resolve the conflicts
+(by editing the relevant files) and then run
+<tt><nobr>git commit -a</nobr></tt>.
+
+<p>
+Here's how to run the extent server and 
+<tt>yfs_client</tt>(s).  If you are using the class machines, choose a port number that
+other students aren't using. For example, to run the extent server on port
+3772, type this:
+</p><pre>% <b>cd ~/lab</b>
+% <b>make</b>
+% <b>./extent_server 3772 &amp;</b>
+</pre>
+
+<p>
+Next, start the 
+<tt>yfs_client</tt> process using three parameters: a unique mountpoint (that other students aren't using), 
+the extent server's port number, and
+the lock server's port number (not used in this lab).  
+The mountpoint must be an empty directory that already exists. 
+To start the <tt>yfs_client</tt> using mountpoint <tt>./myfs</tt> and <tt>extent_server</tt> that listens on port 3772, type this:
+</p><pre>% <b>cd ~/lab</b>
+% <b>mkdir myfs</b>
+% <b>./yfs_client ./myfs 3772 3762 &amp;</b>
+</pre>
+
+<p>We provide you with the script <tt>start.sh</tt> to automatically start <tt>extent_server</tt> and <tt>yfs_client</tt>,
+and <tt>stop.sh</tt> to kill previously started processes.  Actually, <tt>start.sh</tt> starts two <tt>yfs_client</tt>s with 
+<tt>./yfs1</tt> and <tt>./yfs2</tt> mountpoints respectively. Thus you can type:
+</p><pre>% <b>cd ~/lab</b>
+% <b>./start.sh</b>
+% <b>./test-lab-2-a.pl ./yfs1</b>
+% <b>./test-lab-2-b.pl ./yfs1 ./yfs2</b>
+% <b>./stop.sh</b>
+</pre>
+
+<p>
+<b>Note:</b>
+<font color="red">
+If <tt>stop.sh</tt> reports "Device or resource busy", please keep executing
+<tt>stop.sh</tt> until it says "not found in /etc/mtab", such as</font>:
+
+</p><pre>fusermount: entry for /home/your_name/yfs-class/yfs1 not found in /etc/mtab
+fusermount: entry for /home/your_name/yfs-class/yfs2 not found in /etc/mtab
+...
+</pre>
+
+<p>
+The skeleton code implements only GETATTR and STATFS,
+so the file system you just mounted will not be very useful.
+You will implement more FUSE operations in this lab to 
+make your file system more functional.
+</p><ul>
+
+<li>In Part 1, you should implement CREATE/MKNOD, LOOKUP and READDIR.
+Your code should pass the 
+<tt>test-lab-2-a.pl</tt> script, which tests creating empty files, 
+looking up names in a directory, and listing directory contents.
+
+</li><li>In Part 2, you should implement SETATTR, READ, and WRITE.
+Your code should pass the <tt>test-lab-2-b.pl</tt> 
+script, which tests reading, writing, and appending to files, as well as testing 
+whether files written on one yfs_client instance can be read through a second one.
+</li></ul>
+
+
+<p>
+If you are using your own Linux machine, make sure your user ID is in the <tt>fuse</tt> group so that
+you can mount without being root. See <a href="https://pdos.csail.mit.edu/archive/6.824-2012/labs/index.html">Lab Overview</a>
+about how to add a user to the <tt>fuse</tt> group. On FreeBSD, you can run <tt>sysctl 
+vfs.usermount=1</tt> as root, and then you should be able to run <tt>yfs_client</tt> 
+as a normal user. Most Linux machines at MIT are already configured to allow mount 
+without being root, for example:
+</p><ul>
+<li>linerva.mit.edu
+</li><li>linux.mit.edu
+</li><li>athena.dialup.mit.edu
+</li><li>athena.lcs.mit.edu
+</li></ul>
+<p>
+Lab 2 is known to work on Leopard, Tiger, and Snow Leopard.
+
+</p><h2>Part 1: CREATE/MKNOD, LOOKUP, and READDIR</h2>
+<h3>Part 1: Your Job</h3>
+
+ <p>Your job in Part 1 is to implement the extent server, then implement the
+CREATE/MKNOD, LOOKUP and READDIR
+FUSE operations in YFS. You must store the file system's contents in
+the extent server, so that in Part 2 and future labs you can share one file
+system among <tt>yfs_client</tt>s.  It is OK for your
+extent server to store data only in memory; this means that
+if you restart it, all the data previously stored will be lost.
+
+</p><p>
+On some systems, FUSE uses the MKNOD operation to create files, and on
+others, it uses CREATE. The two interfaces have slight differences,
+but in order to spare you the details, we have given you wrappers for
+both that call the common routine
+<tt>createhelper()</tt>. You should implement <tt>createhelper()</tt>.
+
+</p><p>
+As before, if your server passes our tester on the  official class
+programming environment, you are done. If you have questions about whether you
+have to implement specific pieces of file system functionality, then you should
+be guided by the tester: if you can pass the tests without implementing
+something, then you do not have to implement it.  For example, you don't need
+to implement the exclusive create semantics of the CREATE/MKNOD operation.  You
+may modify or add any files you like, except that you should not modify the
+the tester script or the RPC library.
+
+</p><p>
+The Lab 2 tester for Part 1 is <tt>test-lab-2-a.pl</tt>. Run it 
+with your YFS mountpoint as the argument. Here's what a
+successful run of <tt>test-lab-2-a.pl</tt> looks like:
+</p><pre>% <b>./test-lab-2-a.pl ./yfs1</b>
+create file-yyuvjztagkprvmxjnzrbczmvmfhtyxhwloulhggy-18674-0
+create file-hcmaxnljdgbpirprwtuxobeforippbndpjtcxywf-18674-1
+...
+Passed all tests!
+</pre>
+
+The tester creates lots of files with names like <tt>file-XXX-YYY-Z</tt> and
+checks that they appear in directory listings.
+
+<p>
+If you implemented at-most-once RPC correctly, the tests
+should pass with <tt>RPC_LOSSY</tt> set to 5 as well.
+
+</p><p>
+If <tt>test-lab-2-a.pl</tt> exits without printing "Passed all tests!", then it
+thinks something is wrong with your file server. For example, if you
+run <tt>test-lab-2-a.pl</tt> on the skeleton code we give you, you'll probably
+see an error message like this:
+</p><pre>test-lab-2-a: cannot create /tmp/b/file-ddscdywqxzozdoabhztxexkvpaazvtmrmmvcoayp-21501-0 : No such file or directory
+</pre>
+
+<p>
+This error message appears because you have not yet provided code
+to handle the CREATE/MKNOD operation with FUSE.
+That code belongs in <tt>fuseserver_createhelper</tt> in
+<tt>fuse.cc</tt>.
+
+</p><p>
+ <b>Note:</b>
+testing Part 1 on the command line using commands like
+<tt>touch</tt> will not work until you implement the SETATTR
+operation in Part 2.  For now, you
+should do your testing via the <tt>creat/open</tt>, <tt>lookup</tt>,
+and <tt>readdir</tt> system calls in a language like Perl, or simply
+use the provided test script.
+
+
+</p><h3>Part 1: Detailed Guidance</h3>
+<ul>
+<li>Implementing the extent server:
+
+You will need to implement the extent server
+  in <tt>extent_server.cc</tt>. There are four operations:
+<tt>put(key,value)</tt>, <tt>get(key)</tt>, <tt>getattr(key)</tt>,
+and <tt>remove(key)</tt>. The <tt>put</tt> and <tt>get</tt> RPCs are
+used to update and retrieve an extent's contents. The <tt>getattr</tt>
+RPC retrieves an extent's "attributes". The attributes consist of the
+size of the extent, the last content modification time (<tt>mtime</tt>), the
+last attribute change time
+(<tt>ctime</tt>), and last content access time (<tt>atime</tt>).
+The times are seconds since 1970, such as returned by the <tt>time()</tt> 
+call.
+These are really here to help you mimic the behavior of
+UNIX i-nodes; you will be able to use the attributes stored
+in the extent server rather than having to explicitly store
+i-nodes separately from file data.
+Your extent server should
+set the <tt>ctime</tt> and <tt>mtime</tt> to the current time
+in <tt>put()</tt>, and set the <tt>atime</tt> to the current
+time in <tt>get()</tt>.
+<p>
+
+</p><p>
+<b>Note:</b>
+<font color="red">Although the test scripts of Lab 2 access
+<tt>extent_server</tt> sequentially, we recommend you use a
+mutex in <tt>extent_server</tt> to avoid future races.
+</font>
+
+</p></li><li>File/directory IDs:
+
+<p>Both YFS and FUSE need to be able to identify each file and
+directory with a unique identifier, analogous to the i-node number of
+an on-disk UNIX file system. FUSE uses 32-bit numbers as identifiers.
+Your YFS code should use 64-bit numbers whose high 32 bits are zero and
+whose low 32 bits are the same as the file/directory's FUSE identifier.
+We have defined such an 64-bit identifier (called <i>inum</i>) in
+<tt>yfs_client.h</tt>.
+
+</p><p>
+When creating a new file (<tt>fuseserver_createhelper</tt>) or directory 
+(<tt>fuseserver_mkdir</tt>), you must assign a unique <tt>inum</tt>.
+The easiest thing to do is to pick a number at random, hoping that it will
+indeed be unique. (What's the collision probability as the number of 
+files and directories grows?)
+
+</p><p>
+YFS needs to be able to tell whether a particular <tt>inum</tt> refers to 
+a file or a directory. Do this by allocating IDs with the 31st bit of one
+for new files, and IDs with the 31st bit of zero for new directories.
+The method <tt>yfs_client::isfile</tt> assumes this property holds for
+<tt>inum</tt>.
+
+</p><p>
+<b>Note:</b> <font color="red">You are asked to implement
+<tt>fuseserver_mkdir</tt> in Lab 3. But do follow this <tt>inum</tt> naming
+rule in <tt>fuseserver_createhelper</tt> to make your Lab 3 easier.</font>
+</p><p>
+
+</p></li><li>Directory format:
+<p>
+Next, you must choose the format for directories. A directory's
+content contains a set of name to <tt>inum</tt> mappings. You should
+store a directory's entire content in a single entry in the extent
+server, with the directory's <tt>inum</tt> as the key.
+LOOKUP and READDIR read directory contents,
+and CREATE/MKNOD modify directory contents.
+
+</p><p>
+You do not have to implement file modes, permissions, or owners.
+
+</p></li>
+
+<li>FUSE:
+
+<p>
+When a program (such as <tt>ls</tt> or a test script) manipulates a file or
+directory (such as <tt>yfs1</tt>) served by your <tt>yfs_client</tt>,
+the FUSE code in the kernel sends corresponding operations to <tt>yfs_client</tt>
+via FUSE.
+The code we provide you in <tt>fuse.cc</tt> responds to each
+such operation by calling one of a number of procedures,
+for create, read, write, etc. operations.
+You should modify the relevant routines in <tt>fuse.cc</tt> to
+call methods in <tt>yfs_client.cc</tt>. <tt>fuse.cc</tt>
+should just contain glue code, and the core of your file system
+logic should be in <tt>yfs_client.cc</tt>.
+For example, to handle file creation, you should modify
+<tt>fuseserver_createhelper</tt> to call <tt>yfs-&gt;create(...)</tt>,
+and you should add a new <tt>create(...)</tt> method to
+<tt>yfs_client.cc</tt>. Look at <tt>getattr()</tt> in <tt>fuse.cc</tt>
+for an example of how a fuse operation handler works, how it calls
+methods in <tt>yfs_client</tt>, and how it sends results
+and errors back to the kernel.
+YFS uses FUSE's "lowlevel" API. 
+
+</p><p>
+You can find details on what the methods you implement need to do at <a href="http://fuse.sourceforge.net/doxygen/fuse__lowlevel_8h.html">fuse_lowlevel.h</a>.
+Every FUSE handler should either return a successful result to the kernel
+using one of the <tt>fuse_reply_...</tt> routines, or else
+call <tt>fuse_reply_err</tt> to report an error.
+
+</p><p>
+Sending back directory information for READDIR is a bit
+tricky, so we've provided you with much of the necessary code in the
+<tt>dirbuf_add</tt>, <tt>reply_buf_limited</tt>, and
+<tt>fuseserver_readdir</tt> methods.  All that's left for you to do
+for READDIR in <tt>fuse.cc</tt> is to get the directory listing from
+your <tt>yfs_client</tt>, and add it to the <tt>b</tt> data structure
+using <tt>dirbuf_add</tt>.
+
+</p><p>
+<font color="red">
+Though you are free to choose any <tt>inum</tt> identifier you like for
+newly created files, FUSE assumes that the <tt>inum</tt> for the root
+directory is <tt>0x00000001</tt>.  Thus, you'll need to ensure that
+when <tt>yfs_client</tt> starts, it is ready to export an empty directory stored under
+that <tt>inum</tt></font>.
+</p></li>
+
+<li>YFS code:
+
+<p>The bulk of your file system logic should be in <tt>yfs_client</tt>,
+for the most part in routines that correspond to fuse operations
+(create, read, write, mkdir, &amp;c). Your <tt>fuse.cc</tt> code should
+pass <tt>inum</tt>s, file names, &amp;c to your <tt>yfs_client</tt> methods.
+Your <tt>yfs_client</tt> code should retrieve file and directory
+contents from the extent server with <tt>get()</tt>, using the
+<tt>inum</tt> as the extent ID. In the case of directories, your
+<tt>yfs_client</tt> code should parse the directory content
+into a sequence of name/<tt>inum</tt> pairs (i.e. <tt>yfs_client::dirent</tt>s), for lookups, and be able 
+to add new name/<tt>inum</tt> pairs. You should not modify the
+extent server for this part of the lab.
+
+</p></li>
+
+<li>Tips:
+
+<p>
+A reasonable way to get going on <tt>fuse.cc</tt>
+is to run <tt>test-lab-2-a.pl</tt>, find the
+function in <tt>fuse.cc</tt> whose missing implementation is
+causing the tester to fail, and start fixing that function.
+Look at the end of <tt>yfs_client1.log</tt> and/or add your own
+print statements to <tt>fuse.cc</tt>.
+
+</p><p>
+If a file already exists, the CREATE operator (<tt>fuseserver_create</tt> and
+<tt>fuseserver_mknod</tt>) should return EEXIST to FUSE. This is hard to test
+at this point, but may arise in Lab 3 with concurrent creation of
+the same file from different clients.
+
+</p><p>
+
+<tt>start.sh</tt> redirects the STDOUT and STDERR of the
+servers to files in the current 
+directory.  For example, any output you make from fuse.cc will be
+written to <tt>yfs_client1.log</tt>.  Thus, you should look at these
+files for any debug information you print out in your code.
+
+<!--
+<p>
+You can get FUSE to print out the requests and results of
+operations it passes to your file system.  To turn this on, add the
+following line of code to the <tt>main()</tt> function of
+<tt>fuse.cc</tt>, just before the assignment of <tt>mountpoint</tt>
+into <tt>fuse_argv</tt>:
+
+<pre>
+fuse_argv[fuse_argc++] = "-d";
+</pre>
+-->
+
+</p><p>
+See the <a href="https://pdos.csail.mit.edu/archive/6.824-2012/labs/index.html#tips">lab overview</a> 
+for general hacking and debugging tips.
+
+</p><p>
+If you wish to test your code with only some of the FUSE hooks implemented,
+be advised that FUSE may implicitly try to call other hooks. For example, FUSE
+calls LOOKUP when mounting the file system, so you may want to implement that
+first. FUSE prints out to the <tt>yfs_client1.log</tt> file the requests and
+results of operations it passes to your file system. You can study this file to
+see exactly what hooks are called at every step. 
+
+</p></li></ul>
+
+<h2>Part 2: SETATTR, READ, WRITE</h2>
+<h3>Part 2: Your Job</h3>
+
+Your job in Part 2 is to implement SETATTR, WRITE, and READ FUSE operations in
+<tt>fuse.cc</tt>.
+Once your server passes <tt>test-lab-2-b.pl</tt>, you are done.
+If you have questions about whether you have to
+implement specific pieces of FUSE functionality, then you should be
+guided by the tester: if you can pass the tests without implementing something,
+then don't bother implementing it.  Please don't modify the test program
+or the RPC library. We will use our own versions of
+these files during grading.
+
+<p>
+<tt>test-lab-2-b.pl</tt> 
+tests reading, writing, and appending to files, as well as
+testing whether files written on one <tt>yfs_client</tt> instance
+can be read through a
+second one.
+To run the tester, first start two <tt>yfs_client</tt>s using
+the <tt>start.sh</tt> script.  It runs two
+<tt>yfs_client</tt> processes each mounting the <b>same</b> file system under a different name
+(<tt>yfs1</tt> or <tt>yfs2</tt>). 
+
+</p><pre>% <b>./start.sh</b>
+</pre>
+
+<p> 
+Now run <tt>test-lab-2-b.pl</tt> by passing the <tt>yfs1</tt>
+and <tt>yfs2</tt> mountpoints. 
+Since the script tests the <tt>yfs_client</tt>s sequentially,
+<font color="red">
+you do not need to worry about locking for this lab</font>.
+
+</p><pre>% <b>./test-lab-2-b.pl ./yfs1 ./yfs2</b>
+Write and read one file: OK
+Write and read a second file: OK
+Overwrite an existing file: OK
+Append to an existing file: OK
+Write into the middle of an existing file: OK
+Check that one cannot open non-existant file: OK
+Check directory listing: OK
+Read files via second server: OK
+Check directory listing on second server: OK
+Passed all tests
+% <b>./stop.sh</b>
+</pre>
+
+<p>
+If <tt>test-lab-2-b.pl</tt> exits without printing "Passed all tests!" or hangs
+indefinitely, then something is wrong with your file server.
+After you are done with Part 2, you should go back
+and test with <tt>test-lab-2-a.pl</tt> again to
+make sure you did not break anything.
+
+</p><h3>Part 2: Detailed Guidance</h3>
+<ul>
+
+<li>Implementing SETATTR
+<p>
+The operating system can tell your file system to set one or more
+attributes via the FUSE SETATTR operation.  See <a href="http://fuse.sourceforge.net/doxygen/fuse__lowlevel_8h.html">fuse_lowlevel.h</a>
+for the relevant definitions.  The <tt>to_set</tt> argument
+to your SETATTR handler is a mask that indicates which
+attributes should be set.  There is really only one attribute (the file size attribute) you
+need to pay attention to (but feel free to implement the others if you like), 
+indicated by bit <tt>FUSE_SET_ATTR_SIZE</tt>.  Just AND (i.e., <tt>&amp;</tt>) the
+<tt>to_set</tt> mask value with an attribute's bitmask to see if the attribute
+is to be set.  The new value for the attribute to be set is in the
+<tt>attr</tt> parameter passed to your SETATTR handler.
+
+</p><p>
+The operating system may implement overwriting an existing file
+with a call to SETATTR (to truncate the file) rather than CREATE.
+
+</p><p>
+Setting the size attribute of a file can correspond to
+truncating it completely to zero bytes, truncating it to a subset of
+its current length, or even padding bytes on to the file to make it
+bigger.  Your system should handle all these cases correctly.
+</p></li>
+
+<li>Implementing READ/WRITE:
+
+<p>
+A read (<tt>fuseserver_read</tt>) wants up to <tt>size</tt> bytes from a file,
+starting from a certain offset. When less than <tt>size</tt> bytes are
+available, you should return to fuse only the available number of bytes. See
+the manpage for <tt>read(2)</tt> for details.
+</p>
+
+<p>
+For writes (<tt>fuseserver_write</tt>), a non-obvious situation may
+arise if the client tries to write at a file offset that's past the
+current end of the file.  Linux expects the file system to return
+'\0's for any reads of unwritten bytes in these "holes" (see the
+manpage for <tt>lseek(2)</tt> for details). Your write should handle
+this case correctly.
+
+</p></li>
+</ul>
+
+
+<h3>Handin procedure</h3>
+
+E-mail your code as a gzipped tar file to <a href="mailto:6.824-submit@pdos.csail.mit.edu">6.824-submit@pdos.csail.mit.edu</a>
+by the deadline at the
+top of the page.  To do this, execute these commands:
+
+<pre>% <b>cd ~/lab</b>
+% <b>./stop.sh</b>
+% <b>make clean</b>
+% <b>rm core*</b>
+% <b>rm *log</b>
+% <b>cd ..</b>
+% <b>tar czvf `whoami`-lab2.tgz lab</b>
+</pre>
+
+or
+
+<pre>% <b>cd ~/6.824/lab</b>
+% <b>make handin</b>
+</pre>
+
+That should produce a file called <tt>[your_user_name]-lab2.tgz</tt> in your
+home directory.  Attach that file to an email and send it to
+<a href="mailto:6.824-submit@pdos.csail.mit.edu">6.824-submit@pdos.csail.mit.edu</a>.
+<hr>
+
+<address>
+Please post questions or comments on <a href="http://piazza.com/">Piazza</a>.<br>
+
+Back to <a href="http://pdos.csail.mit.edu/6.824/">6.824 home</a>.
+</address>
+
+
+
+<!--  LocalWords:  CCFS classfs FreeBSD RPCs blockdb CCFS's Download wget xzvf
+ -->
+<!--  LocalWords:  fs tgz cd dmalloc freebsd gmake UDP blockdbd fattr fh i'th
+ -->
+<!--  LocalWords:  dirent RPC mtime cdtest pl xcd nfs setattr cb RFC Callaghan
+ -->
+<!--  LocalWords:  libasync prot ccfs setenv ASRC
+ -->
+</body></html>
