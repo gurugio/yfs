@@ -1,0 +1,521 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<link rel="StyleSheet" href="style.css" type="text/css">
+<title>6.824 Lab 1: Lock Server</title>
+</head>
+
+<body>
+<div align="center">
+<h2><a href="../index.html">6.824</a> - Spring 2012</h2>
+</div>
+
+<div align="center">
+<h1>6.824 Lab 1: Lock Server</h1>
+</div>
+
+
+<div align="center">
+<h3>Due: Friday, February 17th, 5:00pm</h3>
+</div>
+
+<hr>
+
+<h3>Introduction</h3>
+<p>
+In this series of labs, you will implement a fully functional
+distributed file server as described in
+the <a href="index.html">overview</a>.  To work correctly,
+the <tt>yfs</tt> servers need a locking service to coordinate updates
+to the file system structures. In this lab, you'll implement a simple lock
+service.
+
+<p>The core logic of 
+the lock service consists of two modules, the lock client and the
+lock server, which communicate via RPCs. A client requests a specific lock from
+the lock server by sending an <tt>acquire</tt> request.  The lock server grants
+the requested lock to one client at a time.  When a client is done with the
+granted lock, it sends a <tt>release</tt> request to the server so the server
+can grant the lock to another client (if any) waiting to acquire the lock.
+
+<p>
+In addition to implementing the lock service, you'll also augment the 
+provided RPC library to ensure <b>at-most-once</b> execution by eliminating
+duplicate RPC requests.  Duplicate requests exist because 
+the RPC system must re-transmit lost RPCs in the face of lossy network
+connections and such re-transmissions often lead to duplicate RPC delivery when
+the original request turns out not to be lost.
+
+<p>Duplicate RPC delivery, when not handled properly, often violates
+application semantics. Here's a example of duplicate RPCs causing
+incorrect lock server behavior.  A client sends an <tt>acquire</tt>
+request for lock x, the server grants the lock, the client releases the lock
+with a <tt>release</tt> request, a duplicate RPC for the
+original <tt>acquire</tt> request then arrives at the server, the server
+grants the lock again, but the client will never release the lock
+again since the second <tt>acquire</tt> is just a duplicate. Such
+behavior is clearly incorrect.
+
+
+<h3>Software</h3>
+
+<p>The files you will need for this and subsequent lab assignments in this
+course are distributed using the <a href="http://git.or.cz/">Git</a>
+version control system.
+To learn more about Git, take a look at the
+<a href="http://www.kernel.org/pub/software/scm/git/docs/user-manual.html">Git
+user's manual</a>, or, if you are already familiar with other version control
+systems, you may find this
+<a href="http://eagain.net/articles/git-for-computer-scientists/">CS-oriented
+overview of Git</a> useful.
+
+<p>
+The URL for the course Git repository is
+<a href="http://am.lcs.mit.edu/6.824-2012/yfs-class.git">http://am.lcs.mit.edu/6.824-2012/yfs-class.git</a>.
+To install the files in your Athena account, you need to <i>clone</i>
+the course repository, by running the commands below.  You must use an
+x86 or x86_64 Athena machine; that is, <tt>uname -a</tt> should
+mention <tt>i386 GNU/Linux</tt> or <tt>i686 GNU/Linux</tt> or 
+<tt>x86_64 GNU/Linux</tt>.  You can
+log into a public i686 Athena host with <tt>ssh -X
+linerva.mit.edu</tt>.
+
+<pre>
+athena% <b>mkdir ~/6.824</b>
+athena% <b>cd ~/6.824</b>
+athena% <b>add git</b>
+athena% <b>git clone http://am.lcs.mit.edu/6.824-2012/yfs-class.git lab</b>
+Initialized empty Git repository in ../6.824/lab/.git/
+got c9c80a1686710307b99b2c8642311e001920641f
+walk c9c80a1686710307b99b2c8642311e001920641f
+got 468233b68dff78915966975f5e9aad54beeea84e
+...
+got 60e68c3bfa43d5d6d1f2b8a2c7a1d5db5fa0e860
+Checking out files: 100% (44/44), done.
+athena% <b>cd lab</b>
+athena% 
+</pre>
+
+<p>
+Git allows you to keep track of the changes you make to the code.
+For example, if you are finished with one of the exercises, and want
+to checkpoint your progress, you can <emph>commit</emph> your changes
+by running:
+<pre>
+athena% <b>git commit -am 'my solution for lab1 exercise9'</b>
+Created commit 60d2135: my solution for lab1 exercise9
+ 1 files changed, 1 insertions(+), 0 deletions(-)
+athena% 
+</pre>
+
+<p>
+You can keep track of your changes by using the <tt>git diff</tt> command.
+Running <tt>git diff</tt> will display the changes to your code since your
+last commit, and <tt>git diff origin/lab1</tt> will display the changes
+relative to the initial code supplied for this lab.
+Here, <tt>origin/lab1</tt> is the name of the git branch with the
+initial code you downloaded from our server for this assignment.
+
+<h3>Getting started</h3>
+
+<p>
+We provide you with a skeleton RPC-based lock server,
+a lock client interface, a sample application that uses the lock client
+interface, and a tester.  Now compile and start up the lock server, giving it a
+port number on which to listen to RPC requests.  You'll need to choose a 
+port number that other programs aren't using. For example:
+
+<pre>
+% cd lab
+% make
+% ./lock_server 3772
+</pre>
+
+Now open a second terminal on the same machine and run
+<tt>lock_demo</tt>, giving it the port number on which the server is
+listening:
+<pre>
+% cd lab
+% ./lock_demo 3772
+stat returned 0
+% 
+</pre>
+
+<p>
+<tt>lock_demo</tt> asks the server for the number of times a particular
+lock has been acquired, using the <tt>stat</tt> RPC that we have
+provided.  In the skeleton code, this will always return 0. You can
+use it as an example of how to add RPCs. You don't need to
+fix <tt>stat</tt> to report the actual number of acquisitions of the
+given lock in this lab, but you may if you wish.
+
+<p>
+The lock client skeleton does not do anything yet for the
+<tt>acquire</tt> and <tt>release</tt> operations; similarly, the lock
+server does not implement lock granting or releasing.  Your 
+job is to implement this functionality in the
+server, and to arrange for the client to send RPCs to the server.
+
+<h3>Your Job</h3>
+
+<p>Your first job is to implement a correct lock server assuming a
+perfect underlying network. <font color="red">Correctness means
+obeying this invariant: at any point in
+time, there is at most one client holding a lock with a given
+identifier. </font>
+
+<p>
+We will use the program <tt>lock_tester</tt> to check 
+the correctness invariant, i.e. whether the server grants each lock just once at any given time, under
+a variety of conditions.  You run <tt>lock_tester</tt> with the same arguments
+as lock_demo.  A successful run of <tt>lock_tester</tt> (with a correct lock
+server) will look like this:
+
+<pre>
+% ./lock_tester 3772
+simple lock client
+acquire a release a acquire a release a
+acquire a acquire b release b release a
+test2: client 0 acquire a release a
+test2: client 2 acquire a release a
+. . .
+./lock_tester: passed all tests successfully
+</pre>
+
+If your lock server isn't correct, <tt>lock_tester</tt> will print an
+error message.  For example, if <tt>lock_tester</tt> complains "error:
+server granted XXX twice", the problem is probably that
+<tt>lock_tester</tt> sent two simultaneous requests for the same lock,
+and the server granted both requests. A
+correct server would have granted the lock to just one client, waited for a release, and
+only then sent granted the lock to the second client.
+
+<p>Your second job is to augment the RPC library
+to guarantee <b>at-most-once</b> execution.  You can tell the
+RPC library to simulate a lossy network
+by setting the environment variable <tt>RPC_LOSSY</tt>.
+If you can pass both the RPC system tester and the <tt>lock_tester</tt>, you 
+are done. Here's a successful run of both testers:
+<pre>
+% export RPC_LOSSY=0
+% ./rpc/rpctest
+simple test
+. . .
+rpctest OK
+
+% killall lock_server
+% export RPC_LOSSY=5
+% ./lock_server 3722 &amp;
+% ./lock_tester 3772
+simple lock client
+acquire a release a acquire a release a
+. . .
+./lock_tester: passed all tests successfully
+</pre>
+
+<p>
+Your code must pass 
+both <tt>./rpc/rpctest</tt> and <tt>lock_tester</tt>; you should ensure it passes several times in a row
+to guarantee there are no rare bugs.  
+You should only make modifications on files <tt>rpc.{cc,h}, lock_client.{cc,h}, lock_server.{cc,h} 
+</tt> and <tt>lock_smain.cc</tt>.  We will test your code with 
+with our own copy of the rest of the source files and testers.
+You are free to add new files to the directory as long as the Makefile
+compiles them appropriately, but you should not need to.
+
+<p>
+For this lab, you will not have to worry about server
+failures or client failures. You also need not be concerned about 
+malicious or buggy applications.
+
+<h3>Detailed Guidance</h3>
+
+In principle, you can implement whatever design you like as long as it
+satisfies the requirements in the "Your Job" section and 
+passes the testers.
+In practice, you should follow the detailed guidance below.
+You might want to look at the general programming tips in the lab <a
+href="index.html#help">overview page</a>.
+
+
+<h4>Step One: implement the lock_server assuming a perfect network</h4>
+First, you should get the lock_server running correctly without worrying 
+about duplicate RPCs.
+
+<ul>
+<li>Using the RPC system: 
+<p> The RPC library's source code is in the subdirectory <tt>rpc/</tt>.
+A server uses the RPC library by creating an RPC server object
+(<tt>rpcs</tt>) listening on a 
+port and registering various RPC handlers
+(see <tt>lock_smain.cc</tt>). 
+A client
+creates a RPC client object (<tt>rpcc</tt>), asks for it to
+be connected to 
+the lock_server's address and port,
+and invokes RPC calls (see <tt>lock_client.cc</tt>). 
+<p>Each RPC procedure is identified by a unique procedure number. 
+We have defined the <tt>acquire</tt> and <tt>release</tt> RPC numbers you will need in <tt>lock_protocol.h</tt>.
+<font color="red">You must register handlers for these
+RPCs with the RPC server object (see <tt>lock_smain.cc</tt>).</font>
+
+<p>
+You can learn how to use the RPC system by studying
+the <tt>stat</tt> call implementation in lock_client and lock_server.
+RPC handlers have a standard interface with 
+one to six request arguments and
+a reply value implemented as a last reference argument.
+The handler also returns an integer status code; the
+convention is to return zero for success and to return positive numbers
+for various errors. If the RPC fails in the RPC library (e.g.timeouts), the RPC client 
+gets a negative return value instead. The various reasons for RPC failures in the 
+RPC library are defined in rpc.h under <tt>rpc_const</tt>. 
+
+<p>
+The RPC system marshalls objects into a stream of
+bytes to transmit over the network and unmarshalls them at the other end.
+Beware: the RPC library does not check that the data in an arriving
+message have the expected type(s). If a client sends one type and
+the server is expecting a different type, something bad will happen.
+You should check that the client's RPC call function sends types
+that are the same as those expected by the corresponding server
+handler function.
+
+<p>
+The
+RPC library provides marshall/unmarshall methods for standard C++
+objects such as <tt>std::string</tt>, <tt>int</tt>, and <tt>char</tt> (see file
+		<tt>rpc.cc</tt>). If your RPC call includes different types of objects
+as arguments, you must provide your own marshalling method. 
+You should be able to complete this lab with existing marshall/unmarshall methods. 
+
+<li>Implementing the lock server:
+<p> 
+The lock server can manage many distinct locks. Each lock is identified by
+an integer of type <tt>lock_protocol::lockid_t</tt>.
+The set of locks is open-ended: if a client asks
+for a lock that the server has never seen before, the server should create the
+lock and grant it to the client. When multiple clients request
+the same lock, the lock server must grant the lock to one client at a time.
+
+<p>
+You will need to modify the lock server skeleton implementation in files 
+<tt>lock_server.{cc,h}</tt> to accept <tt>acquire</tt>/<tt>release</tt> RPCs from the lock
+client, and to keep track of the state of the locks.  Here is our suggested
+implementation plan.
+
+<p>On the server, a lock can be in one of two states;
+	<ul>
+	<li>free: no clients own the client</li>
+	<li>locked: some client owns the lock</li>
+	</ul>
+
+<p>The RPC handler for <tt>acquire</tt> should first check if the lock is
+locked, and if so, the handler should block until the lock is free.  When
+the lock is free, <tt>acquire</tt> changes its state
+to <tt>locked</tt>, then returns to the client, which indicates that
+the client now has the lock. The value <tt>r</tt> returned
+by <tt>acquire</tt> doesn't matter.
+The handler for <tt>release</tt> should change the lock state to free, and
+notify any threads that are waiting for the lock.
+
+<p>Consider using the C++ STL (Standard Template Library)
+<tt>std::map</tt> class to hold the table of lock states.
+
+<li>Implementing the lock client:
+<p>
+The class lock_client is a client-side interface to the lock server (found in files <tt>lock_client.{cc,h}</tt>). 
+The interface provides <tt>acquire()</tt> and <tt>release()</tt>
+functions that should send and receive RPCs. 
+Multiple threads in the client program can use the same <tt>lock_client</tt> object and 
+request the same lock.  See <tt>lock_demo.cc</tt> for an example of how an
+application uses the interface.  
+<b><tt>lock_client::acquire</tt> must not
+    return until it has acquired the requested lock.</b>
+
+</li>
+
+<li>Handling multi-thread concurrency:
+<p>Both <tt>lock_client</tt> and <tt>lock_server</tt>'s functions will be invoked by multiple threads concurrently.
+On the lock server side, the RPC library keeps a thread pool and invokes the RPC handler using one of the idle threads in the pool.
+On the lock client side, many different threads might also call <tt>lock_client</tt>'s <tt>acquire()</tt> and <tt>release()</tt> functions concurrently.
+
+<p>
+You should use pthread mutexes to guard uses of data
+that is shared among threads.
+You should use 
+pthread condition variables so that the lock server acquire
+handler can wait for a lock.
+The <a href="index.html#help">general tips</a> contain a link
+to information about pthreads, mutexes, and condition variables.
+
+<p>
+Threads should wait on a condition variable inside a loop that
+checks the boolean condition on which the thread is waiting.
+This protects the thread from
+spurious wake-ups  from the <tt>pthread_cond_wait()</tt> and
+<tt>pthread_cond_timedwait()</tt> functions.
+
+<p>
+Use a simple mutex scheme: a single pthreads mutex for all of
+<tt>lock_server</tt>.
+You don't really need (for example) a mutex per lock, though
+such a setup can be made to work. Using "coarse-granularity" mutexes
+will simplify your code.
+
+</li>
+</ul>
+
+<h4>Step two: Implement at-most-once delivery in RPC</h4>
+
+The RPC code we provide you has a complete client implementation of
+at-most-once delivery: the client code times out while waiting for a
+response, re-sends the request, and accompanies each request with
+information the server will need for its part of at-most-once
+delivery. However, the code is missing some of the server at-most-once
+code, in particular the implementation of the functions
+<tt>rpcs::checkduplicate_and_update</tt> and <tt>rpcs::add_reply</tt>.
+It is your job to implement those two functions.
+
+<p>
+After your lock server has passed <tt>lock_tester</tt>, test it
+with a simulated lossy network:
+type "<tt>export RPC_LOSSY=5</tt>", restart your lock_server, and try
+lock_tester again. Very likely 
+you will see the lock_tester fail or hang 
+indefinitely. Try to understand exactly why your lock_tester fails when
+re-transmissions cause duplicate RPC delivery.
+
+<p>
+Skim the RPC source code in <tt>rpc/rpc.{cc,h}</tt> and try to grasp the overall 
+structure of the RPC library as much as possible first by yourself before
+proceeding.
+<tt>rpc.cc</tt> already contains some of the code required to
+cope with duplicate requests; your job will be to complete that code.
+
+<p>
+The <tt>rpcc</tt> class manages RPC calls for clients. At its core lies 
+the <tt>rpcc::call1</tt> function, which accepts a marshalled RPC request 
+for transmission to the RPC server. <tt>call1</tt> attaches 
+additional RPC fields to each marshalled request:
+<pre>
+   // add RPC fields before the RPC request data
+   req_header h(ca.xid, proc, clt_nonce_, srv_nonce_, xid_rep_window_.front());
+   req.pack_req_header(h);
+</pre>
+What's the purpose for each field in req_header? (Hint: many of them are going to help you implement
+at-most-once delivery.) After <tt>call1</tt> has finished preparing the final RPC request, it 
+sits in a "while(1)" loop to (repeatedly) update the timeout value for the next
+retransmission and waits for the corresponding RPC reply or timeout to happen.
+Also, if the underlying (TCP) connection to the server fails, rpcc
+automatically re-connects to the server again (in function <tt>get_refconn</tt>) in order to retransmit.
+
+<p>
+The <tt>rpcs</tt> class manages RPC calls for the server. When a connection
+receives an RPC request, it calls <tt>rpcs::got_pdu</tt>
+to dispatch the request to a thread from the pool.
+The thread pool (<tt>class ThrPool</tt>) consists of a fixed number of threads
+that call <tt>rpcs::dispatch</tt> to dispatch an RPC request to the
+relevant registered RPC handler.
+<tt>rpcs::dispatch</tt>
+extracts RPC fields from the request, including
+the RPC procedure number which is used to find the corresponding
+handler. The header fields also provide sufficient information for you to
+ensure that the server eliminates all duplicate requests.
+
+<p>Question: The partial lock server we provide you
+uses "blocking" RPC handlers that sometimes wait (for lock releases).
+How many concurrent "blocking" lock acquire requests can the server handle?
+(Hint: our implementation of <tt>rpcs</tt> currently uses a thread pool of 10 threads).
+
+<p>
+How to ensure at-most-once delivery? A strawman approach is to make the server remember 
+all unique RPCs ever received.  Each unique RPC is identified by both its <tt>xid</tt> (unique 
+across a client instance) and <tt>clt_nonce</tt> (unique across all client instances).
+In addition to the RPC ids, the server must also remember the original
+return value for each RPC so that the server can re-send it in response
+to a duplicate request.
+This strawman guarantees at-most-once, but is not ideal since the memory holding 
+the RPC ids and replies grows indefinitely. A better alternative is to 
+use a sliding window of remembered RPCs at the server.  Such an approach
+requires the client to generate <tt>xid</tt> in a strict sequence, i.e. 0, 1,
+2, 3...  When can the server safely forget about a received RPC and its
+response, i.e. slide the window forward? 
+What if a retransmitted request arrives while the server is still
+processing the original request?
+
+<p>
+Once you figure out the basic design for at-most-once delivery,
+go ahead and implement your design in <tt>rpc.cc</tt>
+and (if needed) <tt>rpc.h</tt>; you should not
+need to modify any other files.
+You need to add code in two places.
+First,
+<tt>rpcs::checkduplicate_and_update</tt>
+should 1) check if a request is a duplicate and
+return information about the remembered reply if it is,
+2) remember that a new request has arrived if it is not a duplicate,
+and 3) trim the window of remembered requests and reply values.
+Second,
+<tt>rpcs::add_reply</tt> should remember
+the RPC reply values for an RPC call that the server has completed.
+You should store the remembered RPC reply values
+in <tt>rpcs::reply_window_</tt>, declared in rpc.h.
+
+<p>
+After you are done with step two, test your RPC implementation
+with <tt>./rpc/rpctest</tt> and <tt>RPC_LOSSY</tt> set to 0 ("<tt>export
+ RPC_LOSSY=0</tt>").
+Make sure <tt>./rpc/rpctest</tt> passes all tests. Once your RPC implementation
+passes all these tests, test your lock server again in a lossy environment by
+restarting your <tt>lock_server</tt> and <tt>lock_tester</tt> after
+setting <tt>RPC_LOSSY</tt> to 5 ("<tt>export RPC_LOSSY=5</tt>").
+The <tt>RPC_LOSSY</tt> environment variable must be set for both
+<tt>lock_server</tt> and <tt>lock_tester</tt>.
+
+
+<h3>Handin procedure</h3>
+
+E-mail your code as a gzipped tar file to <a
+href="mailto:6.824-submit@pdos.csail.mit.edu">6.824-submit@pdos.csail.mit.edu</a>
+by the deadline at the top of the page.  To do this, execute these commands:
+
+<pre>
+% cd ~/6.824
+% tar czvf `whoami`-lab1.tgz lab/
+</pre>
+
+or
+
+<pre>
+% cd ~/6.824/lab
+% make handin
+</pre>
+
+That should produce a file called <tt>[your_user_name]-lab1.tgz</tt> in your
+<tt>lab/</tt> directory.  Attach that file to an email and send it to the 
+address above.
+
+<p>You will receive full credit if your software passes the same tests
+  we gave you when we run your software on our machines.
+
+<hr>
+
+<!--  LocalWords:  CCFS classfs FreeBSD RPCs blockdb CCFS's Download wget xzvf
+ -->
+<!--  LocalWords:  fs tgz cd dmalloc freebsd gmake UDP blockdbd fattr fh i'th
+ -->
+<!--  LocalWords:  dirent RPC mtime cdtest pl xcd nfs setattr cb RFC Callaghan
+ -->
+<!--  LocalWords:  libasync prot ccfs setenv ASRC SFS LS lock's ihash ASRV env
+ -->
+<!--  LocalWords:  ACLNT
+ -->
+<address>
+Please post questions or comments on <a href="http://piazza.com">Piazza</a>.<br>
+
+Back to <a href="http://pdos.csail.mit.edu/6.824/">6.824 home</a>.
+</address>
+
+ </body>
+ </html>
