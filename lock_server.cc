@@ -38,7 +38,6 @@ lock_server::stat(int clt, lock_protocol::lockid_t lid, int &r)
 	std::map<lock_protocol::lockid_t,
 		 struct local_lock *>::iterator it;
 
-	printf("stat: clt %d\n", clt);
 	pthread_mutex_lock(&server_lock);
 	it = lock_table->find(lid);
 	if (it == lock_table->end())
@@ -58,8 +57,6 @@ lock_server::acquire(int clt, lock_protocol::lockid_t lid, int &r)
 	struct local_lock *llock;
 	std::map<lock_protocol::lockid_t,
 		 struct local_lock *>::iterator it;
-
-	printf("acquire: clt-%d lock-%llu\n", clt, lid);
 
 	pthread_mutex_lock(&server_lock);
 	nacquire++;
@@ -82,8 +79,6 @@ lock_server::acquire(int clt, lock_protocol::lockid_t lid, int &r)
 	}
 	r = llock->status = lock_protocol::LOCKED;
 	llock->owner = clt;
-	printf("==> lock: clt-%d lock-%llu nacquire=%d\n", clt, lid,
-	       nacquire);
 	pthread_mutex_unlock(&server_lock);
 	return ret;
 }
@@ -95,8 +90,6 @@ lock_server::release(int clt, lock_protocol::lockid_t lid, int &r)
 	struct local_lock *llock;
 	std::map<lock_protocol::lockid_t,
 		 struct local_lock *>::iterator it;
-
-	printf("release: clt-%d lock-%llu\n", clt, lid);
 
 	pthread_mutex_lock(&server_lock);
 
@@ -120,8 +113,6 @@ lock_server::release(int clt, lock_protocol::lockid_t lid, int &r)
 	nacquire--;
 	pthread_cond_signal(&server_wait);
 
-	printf("==> unlock: clt-%d lock-%llu nacquire=%d\n",
-	       clt, lid, nacquire);
 unlock:
 	pthread_mutex_unlock(&server_lock);
 	return ret;
