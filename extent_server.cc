@@ -25,15 +25,13 @@ int extent_server::put(extent_protocol::extentid_t id, std::string buf, int &)
 	pthread_mutex_lock(&attr_lock);
 
 	it = file_map->find(id);
-	if (it == file_map->end()) {
-		f = new yfsfile();
-		file_map->insert(std::make_pair(id, f));
-	}
+	if (it != file_map->end())
+		return extent_protocol::IOERR;
 
-	it = file_map->find(id);
-	f = it->second;
+	f = new yfsfile();
 	f->file_name = buf;
 	f->file_attr.ctime = f->file_attr.mtime = time(NULL);
+	file_map->insert(std::make_pair(id, f));
 
 	pthread_mutex_unlock(&attr_lock);
 	return extent_protocol::OK;
