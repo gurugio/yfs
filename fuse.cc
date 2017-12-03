@@ -25,6 +25,13 @@ int id() {
   return myid;
 }
 
+/*
+ * The first inode number will be 1.
+ * inode MUST be unique. Assigning inode sequentially can generate
+ * the unique number as long as the last inode number is remembered.
+ */
+unsigned int inode_generator = 1;
+
 //
 // A file/directory's attributes are a set of information
 // including owner, permissions, size, &c. The information is
@@ -220,6 +227,9 @@ fuseserver_createhelper(fuse_ino_t parent, const char *name,
   e->entry_timeout = 0.0;
   e->generation = 0;
   // You fill this in for Lab 2
+
+  e->ino = inode_generator++; // unique number
+  e->inode |= (1<<31); // 31-bit -> file
   return yfs_client::NOENT;
 }
 
