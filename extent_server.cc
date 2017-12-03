@@ -18,10 +18,10 @@ extent_server::extent_server()
 
 int extent_server::put(extent_protocol::extentid_t id, std::string buf, int &)
 {
+	// You fill this in for Lab 2.
 	struct yfsfile *f;
 	std::map<extent_protocol::extentid_t, struct yfsfile *>::iterator it;
 
-	// You fill this in for Lab 2.
 	pthread_mutex_lock(&attr_lock);
 
 	it = file_map->find(id);
@@ -40,26 +40,72 @@ int extent_server::put(extent_protocol::extentid_t id, std::string buf, int &)
 
 int extent_server::get(extent_protocol::extentid_t id, std::string &buf)
 {
-  // You fill this in for Lab 2.
-  return extent_protocol::IOERR;
+	// You fill this in for Lab 2.
+	struct yfsfile *f;
+	std::map<extent_protocol::extentid_t, struct yfsfile *>::iterator it;
+
+	pthread_mutex_lock(&attr_lock);
+
+	it = file_map->find(id);
+	if (it == file_map->end()) {
+		return extent_protocol::IOERR;
+	}
+
+	it = file_map->find(id);
+	f = it->second;
+	buf = f->file_name;
+
+	pthread_mutex_unlock(&attr_lock);
+	return extent_protocol::OK;
 }
 
 int extent_server::getattr(extent_protocol::extentid_t id, extent_protocol::attr &a)
 {
-  // You fill this in for Lab 2.
-  // You replace this with a real implementation. We send a phony response
-  // for now because it's difficult to get FUSE to do anything (including
-  // unmount) if getattr fails.
-  a.size = 0;
-  a.atime = 0;
-  a.mtime = 0;
-  a.ctime = 0;
-  return extent_protocol::OK;
+	// You fill this in for Lab 2.
+	// You replace this with a real implementation. We send a phony response
+	// for now because it's difficult to get FUSE to do anything (including
+	// unmount) if getattr fails.
+	struct yfsfile *f;
+	std::map<extent_protocol::extentid_t, struct yfsfile *>::iterator it;
+
+	pthread_mutex_lock(&attr_lock);
+
+	it = file_map->find(id);
+	if (it == file_map->end()) {
+		return extent_protocol::IOERR;
+	}
+
+	it = file_map->find(id);
+	f = it->second;
+	a.size = f->file_attr.size;
+	a.atime = f->file_attr.atime;
+	a.mtime = f->file_attr.mtime;
+	a.ctime = f->file_attr.ctime;
+
+	pthread_mutex_unlock(&attr_lock);
+	return extent_protocol::OK;
 }
 
 int extent_server::remove(extent_protocol::extentid_t id, int &)
 {
-  // You fill this in for Lab 2.
-  return extent_protocol::IOERR;
+	// You fill this in for Lab 2.
+	struct yfsfile *f;
+	std::map<extent_protocol::extentid_t, struct yfsfile *>::iterator it;
+
+	pthread_mutex_lock(&attr_lock);
+
+	it = file_map->find(id);
+	if (it == file_map->end()) {
+		return extent_protocol::IOERR;
+	}
+
+	it = file_map->find(id);
+	f = it->second;
+
+	file_map->erase(it);
+	free(f);
+
+	pthread_mutex_unlock(&attr_lock);
+	return extent_protocol::OK;
 }
 
