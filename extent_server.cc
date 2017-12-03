@@ -33,6 +33,9 @@ int extent_server::put(extent_protocol::extentid_t id, std::string buf, int &)
 	it = file_map->find(id);
 	f = it->second;
 	f->file_name = buf;
+	f->file_attr.atime =
+		f->file_attr.ctime =
+		f->file_attr.mtime = time(NULL);
 
 	pthread_mutex_unlock(&attr_lock);
 	return extent_protocol::OK;
@@ -59,7 +62,8 @@ int extent_server::get(extent_protocol::extentid_t id, std::string &buf)
 	return extent_protocol::OK;
 }
 
-int extent_server::getattr(extent_protocol::extentid_t id, extent_protocol::attr &a)
+int extent_server::getattr(extent_protocol::extentid_t id,
+			   extent_protocol::attr &a)
 {
 	// You fill this in for Lab 2.
 	// You replace this with a real implementation. We send a phony response
@@ -77,10 +81,7 @@ int extent_server::getattr(extent_protocol::extentid_t id, extent_protocol::attr
 
 	it = file_map->find(id);
 	f = it->second;
-	a.size = f->file_attr.size;
-	a.atime = f->file_attr.atime;
-	a.mtime = f->file_attr.mtime;
-	a.ctime = f->file_attr.ctime;
+	a = f->file_attr;
 
 	pthread_mutex_unlock(&attr_lock);
 	return extent_protocol::OK;

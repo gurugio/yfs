@@ -20,17 +20,24 @@ int main(int argc, char *argv[])
 
 	int dummy;
 	int ret;
-	
+
+	printf("time=%d\n", (int)time(NULL));
 	serv.put(id1, name1, dummy);
 	serv.put(id2, name2, dummy);
 	serv.put(id2, name2, dummy);
 	
-	serv.get(id1, buf);
-	printf("name1=%s\n", buf.c_str());
-	serv.get(id2, buf);
-	printf("name2=%s\n", buf.c_str());
-	serv.get(id3, buf);
-	printf("name3=%s\n", buf.c_str());
+	ret = serv.get(id1, buf);
+	printf("ret=%d name1=%s\n", ret, buf.c_str());
+	serv.getattr(id1, a);
+	printf("%d %d %d %d\n", a.size, a.atime, a.mtime, a.ctime);
+
+	ret = serv.get(id2, buf);
+	printf("ret=%d name2=%s\n", ret, buf.c_str());
+	serv.getattr(id2, a);
+	printf("%d %d %d %d\n", a.size, a.atime, a.mtime, a.ctime);
+
+	ret = serv.get(id3, buf);
+	printf("ret=%d name3=%s\n", ret, buf.c_str());
 	serv.getattr(id3, a);
 	printf("%d %d %d %d\n", a.size, a.atime, a.mtime, a.ctime);
 
@@ -39,5 +46,12 @@ int main(int argc, char *argv[])
 	ret = serv.get(id3, buf);
 	printf("ret=%d name3=%s\n", ret, buf.c_str());
 
+	sleep(2);
+	serv.put(id3, name1+name3, dummy);
+	ret = serv.get(id3, buf);
+	printf("ret=%d name3=%s\n", ret, buf.c_str());
+	serv.getattr(id3, a);
+	printf("%d %d %d %d\n", a.size, a.atime, a.mtime, a.ctime);
+	
 	return 0;
 }
