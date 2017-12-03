@@ -52,6 +52,12 @@ int main(int argc, char *argv[])
 	printf("ret=%d name3=%s\n", ret, buf.c_str());
 	serv.getattr(id3, a);
 	printf("%d %d %d %d\n", a.size, a.atime, a.mtime, a.ctime);
+
+	sleep(3);
+	ret = serv.get(id3, buf);
+	printf("ret=%d name3=%s\n", ret, buf.c_str());
+	serv.getattr(id3, a);
+	printf("%d %d %d %d\n", a.size, a.atime, a.mtime, a.ctime);
 	
 	return 0;
 }
