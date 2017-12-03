@@ -33,9 +33,7 @@ int extent_server::put(extent_protocol::extentid_t id, std::string buf, int &)
 	it = file_map->find(id);
 	f = it->second;
 	f->file_name = buf;
-	f->file_attr.atime =
-		f->file_attr.ctime =
-		f->file_attr.mtime = time(NULL);
+	f->file_attr.ctime = f->file_attr.mtime = time(NULL);
 
 	pthread_mutex_unlock(&attr_lock);
 	return extent_protocol::OK;
@@ -57,6 +55,7 @@ int extent_server::get(extent_protocol::extentid_t id, std::string &buf)
 	it = file_map->find(id);
 	f = it->second;
 	buf = f->file_name;
+	f->file_attr.atime = time(NULL);
 
 	pthread_mutex_unlock(&attr_lock);
 	return extent_protocol::OK;
