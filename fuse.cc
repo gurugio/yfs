@@ -26,11 +26,11 @@ int id() {
 }
 
 /*
- * The first inode number will be 1.
+ * The first inode number will be 2. (1 is the root)
  * inode MUST be unique. Assigning inode sequentially can generate
  * the unique number as long as the last inode number is remembered.
  */
-unsigned int inode_generator = 1;
+unsigned int inode_generator = 2;
 
 //
 // A file/directory's attributes are a set of information
@@ -222,47 +222,61 @@ yfs_client::status
 fuseserver_createhelper(fuse_ino_t parent, const char *name,
                         mode_t mode, struct fuse_entry_param *e)
 {
-  // In yfs, timeouts are always set to 0.0, and generations are always set to 0
-  e->attr_timeout = 0.0;
-  e->entry_timeout = 0.0;
-  e->generation = 0;
-  // You fill this in for Lab 2
+	// In yfs, timeouts are always set to 0.0, and generations are always set to 0
+	e->attr_timeout = 0.0;
+	e->entry_timeout = 0.0;
+	e->generation = 0;
 
-  e->ino = inode_generator++; // unique number
-  e->inode |= (1<<31); // 31-bit -> file
-  return yfs_client::NOENT;
+	// You fill this in for Lab 2
+	yfs_client::status ret;
+	yfs_client::inum fileinum = (1 << 31) | inode_generator++;
+	yfs_client::fileinfo info;
+
+	ret = yfs->createfile(parent, fileinum, name, mode);
+	if(ret != yfs_client::OK)
+		return ret;
+	
+	ret = yfs->getfile(fileinum, info);
+	if(ret != yfs_client::OK)
+		return ret;
+
+	e->ino = fileinum;
+	printf("    create -> %lu %lu %lu\n",
+	       info.atime, info.mtime, info.ctime);
+	return yfs_client::OK;
 }
 
 void
 fuseserver_create(fuse_req_t req, fuse_ino_t parent, const char *name,
                   mode_t mode, struct fuse_file_info *fi)
 {
-  struct fuse_entry_param e;
-  yfs_client::status ret;
-  if( (ret = fuseserver_createhelper( parent, name, mode, &e )) == yfs_client::OK ) {
-    fuse_reply_create(req, &e, fi);
-  } else {
+	struct fuse_entry_param e;
+	yfs_client::status ret;
+	ret = fuseserver_createhelper( parent, name, mode, &e);
+	if (ret == yfs_client::OK) {
+		fuse_reply_create(req, &e, fi);
+	} else {
 		if (ret == yfs_client::EXIST) {
 			fuse_reply_err(req, EEXIST);
 		}else{
 			fuse_reply_err(req, ENOENT);
 		}
-  }
+	}
 }
 
 void fuseserver_mknod( fuse_req_t req, fuse_ino_t parent, 
-    const char *name, mode_t mode, dev_t rdev ) {
-  struct fuse_entry_param e;
-  yfs_client::status ret;
-  if( (ret = fuseserver_createhelper( parent, name, mode, &e )) == yfs_client::OK ) {
-    fuse_reply_entry(req, &e);
-  } else {
+		       const char *name, mode_t mode, dev_t rdev ) {
+	struct fuse_entry_param e;
+	yfs_client::status ret;
+	if( (ret = fuseserver_createhelper( parent, name, mode, &e )) == yfs_client::OK ) {
+		fuse_reply_entry(req, &e);
+	} else {
 		if (ret == yfs_client::EXIST) {
 			fuse_reply_err(req, EEXIST);
 		}else{
 			fuse_reply_err(req, ENOENT);
 		}
-  }
+	}
 }
 
 //

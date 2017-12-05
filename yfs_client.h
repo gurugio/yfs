@@ -2,6 +2,7 @@
 #define yfs_client_h
 
 #include <string>
+#include <list>
 //#include "yfs_protocol.h"
 #include "extent_client.h"
 #include <vector>
@@ -31,6 +32,10 @@ class yfs_client {
     yfs_client::inum inum;
   };
 
+  std::list<dirent> root;
+  std::map<inum, std::list<dirent> > directories;
+
+
  private:
   static std::string filename(inum);
   static inum n2i(std::string);
@@ -43,6 +48,7 @@ class yfs_client {
 
   int getfile(inum, fileinfo &);
   int getdir(inum, dirinfo &);
+  int createfile(inum, inum, const char *, mode_t);
 };
 
 #endif 
