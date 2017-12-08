@@ -84,6 +84,27 @@ int extent_server::getattr(extent_protocol::extentid_t id,
 	return extent_protocol::OK;
 }
 
+int extent_server::putattr(extent_protocol::extentid_t id,
+			   extent_protocol::attr a)
+{
+	struct yfsfile *f;
+	std::map<extent_protocol::extentid_t, struct yfsfile *>::iterator it;
+
+	pthread_mutex_lock(&attr_lock);
+
+	it = file_map->find(id);
+	if (it == file_map->end()) {
+		return extent_protocol::IOERR;
+	}
+
+	it = file_map->find(id);
+	f = it->second;
+	f->file_attr = a;
+
+	pthread_mutex_unlock(&attr_lock);
+	return extent_protocol::OK;
+}
+
 int extent_server::remove(extent_protocol::extentid_t id, int &)
 {
 	// You fill this in for Lab 2.

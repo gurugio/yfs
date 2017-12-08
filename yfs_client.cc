@@ -113,6 +113,7 @@ int yfs_client::createfile(inum parent_inum, inum file_inum,
 	std::list<dirent *> files_in_parent;
 	std::list<dirent *>::iterator it_dirent;
 	dirent *new_file;
+	extent_protocol::attr a;
 
 	printf("create %016llx %s\n", file_inum, name);
 
@@ -140,13 +141,15 @@ int yfs_client::createfile(inum parent_inum, inum file_inum,
 	files_in_parent.push_back(new_file);
 	directories[parent_inum] = files_in_parent;
 
-	for (it_dirent = files_in_parent.begin();
-	     it_dirent != files_in_parent.end(); it_dirent++) {
-		printf("  new-file: %s\n", (*it_dirent)->name.c_str());
-		if ((*it_dirent)->inum == file_inum) {
-			r = EXIST;
-			goto exit_error;
-		}
+	// change mtime, ctime of parent directory
+	if (ec && ec->getattr(parent_inum, a) != extent_protocol::OK) {
+		r = IOERR;
+		goto exit_error;
+	}
+	a.mtime = a.ctime = time(NULL);
+	if (ec && ec->putattr(parent_inum, a) != extent_protocol::OK) {
+		r = IOERR;
+		goto exit_error;
 	}
 
 	if (ec && ec->put(file_inum, std::string(name)) != extent_protocol::OK) {
