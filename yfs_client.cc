@@ -96,16 +96,30 @@ yfs_client::getdir(inum inum, dirinfo &din)
   return r;
 }
 
-// - If a file named @name already exists in @parent, return EXIST.
-// - Pick an ino (with type of yfs_client::inum) for file @name. 
-//   Make sure ino indicates a file, not a directory!
-// - Create an empty extent for ino.
-// - Add a <name, ino> entry into @parent.
-// - Change the parent's mtime and ctime to the current time/date
-//   (this may fall naturally out of your extent server code).
-// - On success, store the inum of newly created file into @e->ino, 
-//   and the new file's attribute into @e->attr. Get the file's
-//   attributes with getattr().
+int yfs_client::lookup(inum parent_inum, const char *name, inum &file_inum)
+{
+	std::list<dirent *> files_in_parent;
+	std::list<dirent *>::iterator it_dirent;
+
+	printf("lookup %s\n", name);
+
+	if (directories.find(parent_inum) == directories.end()) {
+		return NOENT;
+	}
+
+	files_in_parent = directories[parent_inum];
+
+	for (it_dirent = files_in_parent.begin();
+	     it_dirent != files_in_parent.end(); it_dirent++) {
+		printf("  current-file: %s\n", (*it_dirent)->name.c_str());
+		if ((*it_dirent)->name == name) {
+			file_inum = (*it_dirent)->inum;
+			return EXIST;
+		}
+	}
+	return NOENT;
+}
+
 int yfs_client::createfile(inum parent_inum, inum file_inum,
 			   const char *name, mode_t mode)
 {
@@ -118,14 +132,12 @@ int yfs_client::createfile(inum parent_inum, inum file_inum,
 	printf("create %016llx %s\n", file_inum, name);
 
 	if (directories.find(parent_inum) == directories.end()) {
-		// parent does not exist
 		r = NOENT;
 		goto exit_error;
 	}
 
 	files_in_parent = directories[parent_inum];
 
-	// search name in files_in_parent list
 	for (it_dirent = files_in_parent.begin();
 	     it_dirent != files_in_parent.end(); it_dirent++) {
 		printf("  current-file: %s\n", (*it_dirent)->name.c_str());
@@ -146,11 +158,13 @@ int yfs_client::createfile(inum parent_inum, inum file_inum,
 		r = IOERR;
 		goto exit_error;
 	}
+
 	a.mtime = a.ctime = time(NULL);
-	if (ec && ec->putattr(parent_inum, a) != extent_protocol::OK) {
+	if (ec && ec->putattr(file_inum, a) != extent_protocol::OK) {
 		r = IOERR;
 		goto exit_error;
 	}
+
 
 	if (ec && ec->put(file_inum, std::string(name)) != extent_protocol::OK) {
 		r = IOERR;
@@ -160,4 +174,3 @@ int yfs_client::createfile(inum parent_inum, inum file_inum,
 exit_error:
 	return r;
 }
-
