@@ -248,7 +248,7 @@ fuseserver_createhelper(fuse_ino_t parent, const char *name,
 	if(ret != yfs_client::OK)
 		return ret;
 
-	ret = yfs->getfile(fileinum, info);
+	ret = getattr(fileinum, e->attr);
 	if(ret != yfs_client::OK)
 		return ret;
 
