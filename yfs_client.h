@@ -32,8 +32,8 @@ class yfs_client {
     yfs_client::inum inum;
   };
 
-  std::list<dirent> root;
-  std::map<inum, std::list<dirent> > directories;
+  std::list<dirent *> root;
+  std::map<inum, std::list<dirent *> > directories;
 
 
  private:

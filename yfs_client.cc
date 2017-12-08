@@ -12,8 +12,15 @@
 
 yfs_client::yfs_client(std::string extent_dst, std::string lock_dst)
 {
-  ec = new extent_client(extent_dst);
-  directories[1] = root;
+	if (extent_dst != "0")
+		ec = new extent_client(extent_dst);
+	else
+		ec = NULL;
+	directories[1] = root;
+	if (ec && ec->put(1, std::string("/")) != extent_protocol::OK) {
+		printf("ERROR: failed to create root directory");
+	}
+	// TODO: use lock_dst to create lock_server
 }
 
 yfs_client::inum
@@ -103,7 +110,9 @@ int yfs_client::createfile(inum parent_inum, inum file_inum,
 			   const char *name, mode_t mode)
 {
 	int r = OK;
-	std::list<dirent> files_in_parent;
+	std::list<dirent *> files_in_parent;
+	std::list<dirent *>::iterator it_dirent;
+	dirent *new_file;
 
 	printf("create %016llx %s\n", file_inum, name);
 
@@ -116,9 +125,31 @@ int yfs_client::createfile(inum parent_inum, inum file_inum,
 	files_in_parent = directories[parent_inum];
 
 	// search name in files_in_parent list
-	
+	for (it_dirent = files_in_parent.begin();
+	     it_dirent != files_in_parent.end(); it_dirent++) {
+		printf("  current-file: %s\n", (*it_dirent)->name.c_str());
+		if ((*it_dirent)->inum == file_inum) {
+			r = EXIST;
+			goto exit_error;
+		}
+	}
 
-	if (ec->put(file_inum, std::string(name)) != extent_protocol::OK) {
+	new_file = new dirent;
+	new_file->name = std::string(name);
+	new_file->inum = file_inum;
+	files_in_parent.push_back(new_file);
+	directories[parent_inum] = files_in_parent;
+
+	for (it_dirent = files_in_parent.begin();
+	     it_dirent != files_in_parent.end(); it_dirent++) {
+		printf("  new-file: %s\n", (*it_dirent)->name.c_str());
+		if ((*it_dirent)->inum == file_inum) {
+			r = EXIST;
+			goto exit_error;
+		}
+	}
+
+	if (ec && ec->put(file_inum, std::string(name)) != extent_protocol::OK) {
 		r = IOERR;
 		goto exit_error;
 	}
