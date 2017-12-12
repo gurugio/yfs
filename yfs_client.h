@@ -50,6 +50,7 @@ class yfs_client {
   int getdir(inum, dirinfo &);
   int lookup(inum, const char *, inum &);
   int createfile(inum, inum, const char *, mode_t);
+  std::list<dirent *> readdir(inum);
 };
 
 #endif

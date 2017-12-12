@@ -9,7 +9,6 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
-
 yfs_client::yfs_client(std::string extent_dst, std::string lock_dst)
 {
 	if (extent_dst != "0")
@@ -101,23 +100,31 @@ int yfs_client::lookup(inum parent_inum, const char *name, inum &file_inum)
 	std::list<dirent *> files_in_parent;
 	std::list<dirent *>::iterator it_dirent;
 
-	printf("lookup %s\n", name);
+	printf("lookup: parent_inum=%llu name=%s\n", parent_inum, name);
 
 	if (directories.find(parent_inum) == directories.end()) {
 		return NOENT;
 	}
 
+	printf("  lookup: found parent\n");
 	files_in_parent = directories[parent_inum];
 
 	for (it_dirent = files_in_parent.begin();
 	     it_dirent != files_in_parent.end(); it_dirent++) {
-		printf("  current-file: %s\n", (*it_dirent)->name.c_str());
+		printf("  lookup: found-file: %s\n",
+		       (*it_dirent)->name.c_str());
 		if ((*it_dirent)->name == name) {
 			file_inum = (*it_dirent)->inum;
 			return EXIST;
 		}
 	}
 	return NOENT;
+}
+
+std::list<yfs_client::dirent *> yfs_client::readdir(inum dir_inum)
+{
+	printf("yfs: readdir: dir_inum=%llx\n", dir_inum);
+	return directories[dir_inum];
 }
 
 int yfs_client::createfile(inum parent_inum, inum file_inum,

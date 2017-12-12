@@ -70,7 +70,8 @@ getattr(yfs_client::inum inum, struct stat &st)
      st.st_mtime = info.mtime;
      st.st_ctime = info.ctime;
      st.st_size = info.size;
-     printf("   getattr -> %llu\n", info.size);
+     printf("   getattr -> time:%lu %lu %lu size:%llu\n",
+	    info.atime, info.mtime, info.ctime, info.size);
    } else {
      yfs_client::dirinfo info;
      ret = yfs->getdir(inum, info);
@@ -81,7 +82,8 @@ getattr(yfs_client::inum inum, struct stat &st)
      st.st_atime = info.atime;
      st.st_mtime = info.mtime;
      st.st_ctime = info.ctime;
-     printf("   getattr -> %lu %lu %lu\n", info.atime, info.mtime, info.ctime);
+     printf("   getattr -> time:%lu %lu %lu\n",
+	    info.atime, info.mtime, info.ctime);
    }
    return yfs_client::OK;
 }
@@ -310,10 +312,13 @@ fuseserver_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 	// You fill this in for Lab 2
 	ret = yfs->lookup(parent, name, fileinum);
 	if (ret == yfs_client::EXIST) {
+		printf("FUSE: lookup: exist\n");
 		getattr(fileinum, e.attr);
 		fuse_reply_entry(req, &e);
-	} else
+	} else {
+		printf("FUSE: lookup: noent\n");
 		fuse_reply_err(req, ENOENT);
+	}
 }
 
 
@@ -357,24 +362,38 @@ void
 fuseserver_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 		   off_t off, struct fuse_file_info *fi)
 {
-  yfs_client::inum inum = ino; // req->in.h.nodeid;
-  struct dirbuf b;
+	yfs_client::inum inum = ino; // req->in.h.nodeid;
+	struct dirbuf b;
+	yfs_client::dirinfo dummyinfo;
+	std::list<yfs_client::dirent *> files_in_parent;
+	std::list<yfs_client::dirent *>::iterator it_dirent;
 
-  printf("fuseserver_readdir\n");
+	printf("FUSE: readdir ino=%lu\n", ino);
 
-  if(!yfs->isdir(inum)){
-    fuse_reply_err(req, ENOTDIR);
-    return;
-  }
+	if(!yfs->isdir(inum)){
+		fuse_reply_err(req, ENOTDIR);
+		return;
+	}
 
-  memset(&b, 0, sizeof(b));
+	memset(&b, 0, sizeof(b));
 
+	// You fill this in for Lab 2
+	if (yfs->getdir(inum, dummyinfo) != yfs_client::OK) {
+		fuse_reply_err(req, ENOENT);
+		return;
+	}
 
-  // You fill this in for Lab 2
+	files_in_parent = yfs->readdir(inum);
+	// TODO(2017-12-12): traverse files_in_parent and call dirbuf_add with each entry
+	for (it_dirent = files_in_parent.begin();
+	     it_dirent != files_in_parent.end(); it_dirent++) {
+		printf("FUSE: readdir: found-file: %s\n",
+		       (*it_dirent)->name.c_str());
+		dirbuf_add(&b, (*it_dirent)->name.c_str(), (*it_dirent)->inum);
+	}
 
-
-  reply_buf_limited(req, b.p, b.size, off, size);
-  free(b.p);
+	reply_buf_limited(req, b.p, b.size, off, size);
+	free(b.p);
 }
 
 
