@@ -92,7 +92,7 @@ int extent_server::getattr(extent_protocol::extentid_t id,
 }
 
 int extent_server::putattr(extent_protocol::extentid_t id,
-			   extent_protocol::attr a)
+			   extent_protocol::attr &a)
 {
 	struct yfsfile *f;
 	std::map<extent_protocol::extentid_t, struct yfsfile *>::iterator it;
