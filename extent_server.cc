@@ -22,19 +22,23 @@ int extent_server::put(extent_protocol::extentid_t id, std::string buf, int &)
 	struct yfsfile *f;
 	std::map<extent_protocol::extentid_t, struct yfsfile *>::iterator it;
 
+	printf("es:put:id=%016llx name=%s\n", id, buf.c_str());
 	pthread_mutex_lock(&attr_lock);
 
 	it = file_map->find(id);
 	if (it != file_map->end()) {
+		printf("es:put: already exist\n");
 		pthread_mutex_unlock(&attr_lock);
 		return extent_protocol::IOERR;
 	}
 
 	f = new yfsfile();
 	f->file_name = buf;
-	f->file_attr.ctime = f->file_attr.mtime = time(NULL);
+	f->file_attr.ctime = f->file_attr.mtime = f->file_attr.atime = time(NULL);
 	file_map->insert(std::make_pair(id, f));
 
+	printf("es:put:insert time=%u\n",
+	       f->file_attr.ctime);
 	pthread_mutex_unlock(&attr_lock);
 	return extent_protocol::OK;
 }
@@ -45,10 +49,12 @@ int extent_server::get(extent_protocol::extentid_t id, std::string &buf)
 	struct yfsfile *f;
 	std::map<extent_protocol::extentid_t, struct yfsfile *>::iterator it;
 
+	printf("es:get:id=%016llx\n", id);
 	pthread_mutex_lock(&attr_lock);
 
 	it = file_map->find(id);
 	if (it == file_map->end()) {
+		printf("es:get: not exist\n");
 		pthread_mutex_unlock(&attr_lock);
 		return extent_protocol::IOERR;
 	}
@@ -57,7 +63,8 @@ int extent_server::get(extent_protocol::extentid_t id, std::string &buf)
 	f = it->second;
 	buf = f->file_name;
 	f->file_attr.atime = time(NULL);
-
+	printf("es:get: name=%s atime=%u\n",
+	       buf.c_str(), f->file_attr.atime);
 	pthread_mutex_unlock(&attr_lock);
 	return extent_protocol::OK;
 }
@@ -86,8 +93,10 @@ int extent_server::getattr(extent_protocol::extentid_t id,
 	f = it->second;
 	a = f->file_attr;
 
+	printf("es: getattr: id=%llx %u %u %u %u\n",
+	       id, a.atime, a.mtime, a.ctime, a.size);
+
 	pthread_mutex_unlock(&attr_lock);
-	printf("es: getattr: ok\n");
 	return extent_protocol::OK;
 }
 
