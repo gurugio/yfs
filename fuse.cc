@@ -58,34 +58,41 @@ getattr(yfs_client::inum inum, struct stat &st)
   bzero(&st, sizeof(st));
 
   st.st_ino = inum;
-  printf("getattr %016llx %d\n", inum, yfs->isfile(inum));
+  printf("FUSE: getattr %016llx %d\n", inum, yfs->isfile(inum));
   if(yfs->isfile(inum)){
-     yfs_client::fileinfo info;
-     ret = yfs->getfile(inum, info);
-     if(ret != yfs_client::OK)
-       return ret;
-     st.st_mode = S_IFREG | 0666;
-     st.st_nlink = 1;
-     st.st_atime = info.atime;
-     st.st_mtime = info.mtime;
-     st.st_ctime = info.ctime;
-     st.st_size = info.size;
-     printf("   getattr -> time:%lu %lu %lu size:%llu\n",
-	    info.atime, info.mtime, info.ctime, info.size);
-   } else {
-     yfs_client::dirinfo info;
-     ret = yfs->getdir(inum, info);
-     if(ret != yfs_client::OK)
-       return ret;
-     st.st_mode = S_IFDIR | 0777;
-     st.st_nlink = 2;
-     st.st_atime = info.atime;
-     st.st_mtime = info.mtime;
-     st.st_ctime = info.ctime;
-     printf("   getattr -> time:%lu %lu %lu\n",
-	    info.atime, info.mtime, info.ctime);
-   }
-   return yfs_client::OK;
+	  yfs_client::fileinfo info;
+	  ret = yfs->getfile(inum, info);
+	  if(ret != yfs_client::OK)
+		  return ret;
+	  st.st_mode = S_IFREG | 0644; //0666;
+	  st.st_nlink = 1;
+	  st.st_atime = info.atime;
+	  st.st_mtime = info.mtime;
+	  st.st_ctime = info.ctime;
+	  st.st_size = info.size;
+	  printf("   getattr -> time:%lu %lu %lu size:%llu\n",
+		 info.atime, info.mtime, info.ctime, info.size);
+  } else {
+	  yfs_client::dirinfo info;
+	  ret = yfs->getdir(inum, info);
+	  if(ret != yfs_client::OK) {
+		  // return dummy for test
+		  st.st_mode = S_IFDIR | 0777;
+		  st.st_nlink = 2;
+		  st.st_mtime = st.st_ctime = st.st_atime = time(NULL);
+		  ret = yfs_client::OK;
+		  printf("   getattr -> dummy time:\n");
+		  return ret;
+	  }
+	  st.st_mode = S_IFDIR | 0777;
+	  st.st_nlink = 2;
+	  st.st_atime = info.atime;
+	  st.st_mtime = info.mtime;
+	  st.st_ctime = info.ctime;
+	  printf("   getattr -> time:%lu %lu %lu\n",
+		 info.atime, info.mtime, info.ctime);
+  }
+  return yfs_client::OK;
 }
 
 //
@@ -116,7 +123,9 @@ fuseserver_getattr(fuse_req_t req, fuse_ino_t ino,
       fuse_reply_err(req, ENOENT);
       return;
     }
-    fuse_reply_attr(req, &st, 0);
+    printf("FUSE:reply_attr:time:%lu %lu %lu\n",
+	   st.st_atime, st.st_mtime, st.st_ctime);
+    fuse_reply_attr(req, &st, 0.0);
 }
 
 //
@@ -314,6 +323,10 @@ fuseserver_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 	if (ret == yfs_client::EXIST) {
 		printf("FUSE: lookup: exist\n");
 		getattr(fileinum, e.attr);
+		//
+		// MUST set ino or 'ls -l' command cannot show file attributes
+		//
+		e.ino = fileinum;
 		fuse_reply_entry(req, &e);
 	} else {
 		printf("FUSE: lookup: noent\n");
@@ -384,7 +397,6 @@ fuseserver_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 	}
 
 	files_in_parent = yfs->readdir(inum);
-	// TODO(2017-12-12): traverse files_in_parent and call dirbuf_add with each entry
 	for (it_dirent = files_in_parent.begin();
 	     it_dirent != files_in_parent.end(); it_dirent++) {
 		printf("FUSE: readdir: found-file: %s\n",

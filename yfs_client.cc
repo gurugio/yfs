@@ -58,7 +58,7 @@ yfs_client::getfile(inum inum, fileinfo &fin)
 {
   int r = OK;
 
-  printf("getfile %016llx\n", inum);
+  printf("yfs:getfile %016llx\n", inum);
   extent_protocol::attr a;
   if (ec->getattr(inum, a) != extent_protocol::OK) {
     r = IOERR;
@@ -69,7 +69,7 @@ yfs_client::getfile(inum inum, fileinfo &fin)
   fin.mtime = a.mtime;
   fin.ctime = a.ctime;
   fin.size = a.size;
-  printf("getfile %016llx -> sz %llu\n", inum, fin.size);
+  printf("yfs:getfile %016llx -> sz %llu\n", inum, fin.size);
 
  release:
 
@@ -81,7 +81,7 @@ yfs_client::getdir(inum inum, dirinfo &din)
 {
   int r = OK;
 
-  printf("getdir %016llx\n", inum);
+  printf("yfs:getdir %016llx\n", inum);
   extent_protocol::attr a;
   if (ec->getattr(inum, a) != extent_protocol::OK) {
     r = IOERR;
@@ -111,8 +111,9 @@ int yfs_client::lookup(inum parent_inum, const char *name, inum &file_inum)
 
 	for (it_dirent = files_in_parent.begin();
 	     it_dirent != files_in_parent.end(); it_dirent++) {
-		printf("  lookup: found-file: %s\n",
-		       (*it_dirent)->name.c_str());
+		printf("  lookup: file-list: %s(%01llx)\n",
+		       (*it_dirent)->name.c_str(),
+		       (*it_dirent)->inum);
 		if ((*it_dirent)->name == name) {
 			file_inum = (*it_dirent)->inum;
 			return EXIST;
