@@ -17,24 +17,29 @@ class yfs_client {
   typedef int status;
 
   struct fileinfo {
-    unsigned long long size;
-    unsigned long atime;
-    unsigned long mtime;
-    unsigned long ctime;
+	unsigned long long size;
+	unsigned long atime;
+	unsigned long mtime;
+	unsigned long ctime;
   };
   struct dirinfo {
-    unsigned long atime;
-    unsigned long mtime;
-    unsigned long ctime;
+	unsigned long atime;
+	unsigned long mtime;
+	unsigned long ctime;
   };
   struct dirent {
-    std::string name;
-    yfs_client::inum inum;
+	std::string name;
+	yfs_client::inum inum;
+  };
+  struct fileent {
+	  std::string name;
+	  unsigned int size;
+	  char *buf;
   };
 
   std::list<dirent *> root;
   std::map<inum, std::list<dirent *> > directories;
-
+  std::map<inum, fileent *> files;
 
  private:
   static std::string filename(inum);
@@ -51,6 +56,7 @@ class yfs_client {
   int lookup(inum, const char *, inum &);
   int createfile(inum, inum, const char *, mode_t);
   std::list<dirent *> readdir(inum);
+  int setfilebuf(inum, char *, unsigned int);
 };
 
 #endif

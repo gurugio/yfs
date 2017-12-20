@@ -43,7 +43,7 @@ bool
 yfs_client::isfile(inum inum)
 {
   if(inum & 0x80000000)
-    return true;
+	return true;
   return false;
 }
 
@@ -61,8 +61,8 @@ yfs_client::getfile(inum inum, fileinfo &fin)
   printf("yfs:getfile %016llx\n", inum);
   extent_protocol::attr a;
   if (ec->getattr(inum, a) != extent_protocol::OK) {
-    r = IOERR;
-    goto release;
+	r = IOERR;
+	goto release;
   }
 
   fin.atime = a.atime;
@@ -84,8 +84,8 @@ yfs_client::getdir(inum inum, dirinfo &din)
   printf("yfs:getdir %016llx\n", inum);
   extent_protocol::attr a;
   if (ec->getattr(inum, a) != extent_protocol::OK) {
-    r = IOERR;
-    goto release;
+	r = IOERR;
+	goto release;
   }
   din.atime = a.atime;
   din.mtime = a.mtime;
@@ -110,10 +110,10 @@ int yfs_client::lookup(inum parent_inum, const char *name, inum &file_inum)
 	files_in_parent = directories[parent_inum];
 
 	for (it_dirent = files_in_parent.begin();
-	     it_dirent != files_in_parent.end(); it_dirent++) {
+		 it_dirent != files_in_parent.end(); it_dirent++) {
 		printf("  lookup: file-list: %s(%01llx)\n",
-		       (*it_dirent)->name.c_str(),
-		       (*it_dirent)->inum);
+			   (*it_dirent)->name.c_str(),
+			   (*it_dirent)->inum);
 		if ((*it_dirent)->name == name) {
 			file_inum = (*it_dirent)->inum;
 			return EXIST;
@@ -134,7 +134,8 @@ int yfs_client::createfile(inum parent_inum, inum file_inum,
 	int r = OK;
 	std::list<dirent *> files_in_parent;
 	std::list<dirent *>::iterator it_dirent;
-	dirent *new_file;
+	dirent *new_dirent;
+	fileent *new_fileent;
 	extent_protocol::attr a;
 
 	printf("yfs: create: %016llx %s\n", file_inum, name);
@@ -147,34 +148,40 @@ int yfs_client::createfile(inum parent_inum, inum file_inum,
 	files_in_parent = directories[parent_inum];
 
 	for (it_dirent = files_in_parent.begin();
-	     it_dirent != files_in_parent.end(); it_dirent++) {
-		printf("  current-file: %s\n", (*it_dirent)->name.c_str());
+		 it_dirent != files_in_parent.end(); it_dirent++) {
+		//printf("  current-file: %s\n", (*it_dirent)->name.c_str());
 		if ((*it_dirent)->inum == file_inum) {
 			r = EXIST;
 			goto exit_error;
 		}
 	}
 
-	new_file = new dirent;
-	new_file->name = std::string(name);
-	new_file->inum = file_inum;
-	files_in_parent.push_back(new_file);
+	// store dir info
+	new_dirent = new dirent;
+	new_dirent->name = std::string(name);
+	new_dirent->inum = file_inum;
+	files_in_parent.push_back(new_dirent);
 	directories[parent_inum] = files_in_parent;
 	printf("yfs: create: insert new file with inum=%llx\n", file_inum);
 
 	// change mtime, ctime of parent directory
-	printf("yfs: create: getattr %llx\n", parent_inum);
+	printf("yfs: create: change attr of parent dir %llx\n", parent_inum);
 	if (ec && ec->getattr(parent_inum, a) != extent_protocol::OK) {
 		r = IOERR;
 		goto exit_error;
 	}
-
-	printf("yfs: create: putattr %llx\n", parent_inum);
 	a.mtime = a.ctime = time(NULL);
 	if (ec && ec->putattr(parent_inum, a) != extent_protocol::OK) {
 		r = IOERR;
 		goto exit_error;
 	}
+
+	// create file buffer
+	new_fileent = new fileent;
+	new_fileent->name = std::string(name);
+	new_fileent->size = 0;
+	new_fileent->buf = NULL;
+	files.insert(std::make_pair(file_inum, new_fileent));
 
 	printf("yfs: create: put %llx\n", file_inum);
 	if (ec && ec->put(file_inum, std::string(name)) != extent_protocol::OK) {
@@ -183,6 +190,42 @@ int yfs_client::createfile(inum parent_inum, inum file_inum,
 	}
 
 exit_error:
-	printf("yfs: create: exit with %d\n", r);
+	if (r != OK) printf("yfs: create: exit with error=%d\n", r);
 	return r;
+}
+
+int yfs_client::setfilebuf(inum file_inum, char *data, unsigned int size)
+{
+	std::map<inum, fileent *>::iterator it_fileent;
+	struct fileent *entry;
+
+	printf("yfs:setfilebuf: inum=%llu size=%u\n", file_inum, size);
+
+	it_fileent = files.find(file_inum);
+	if (it_fileent == files.end()) {
+		return NOENT;
+	}
+
+	printf("yfs:setfilebuf: found file\n");
+	entry = it_fileent->second;
+
+	if (size > entry->size) {
+		char *newbuf = (char *)calloc(size, sizeof(char));
+		memcpy(newbuf, entry->buf, entry->size);
+		free(entry->buf);
+		entry->buf = newbuf;
+	} else if (size < entry->size) {
+		char *newbuf = (char *)calloc(size, sizeof(char));
+		memcpy(newbuf, entry->buf, size);
+		free(entry->buf);
+		entry->buf == newbuf;
+	} else {
+		// do nothing
+	}
+
+	if (data != NULL) {
+		// TODO: copy data to file buffer
+	}
+
+	return OK;
 }

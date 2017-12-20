@@ -119,18 +119,18 @@ void
 fuseserver_getattr(fuse_req_t req, fuse_ino_t ino,
 		   struct fuse_file_info *fi)
 {
-    struct stat st;
-    yfs_client::inum inum = ino; // req->in.h.nodeid;
-    yfs_client::status ret;
+	struct stat st;
+	yfs_client::inum inum = ino; // req->in.h.nodeid;
+	yfs_client::status ret;
 
-    ret = getattr(inum, st);
-    if(ret != yfs_client::OK){
-      fuse_reply_err(req, ENOENT);
-      return;
-    }
-    debug_printf("FUSE:reply_attr:time:%lu %lu %lu\n",
+	ret = getattr(inum, st);
+	if(ret != yfs_client::OK){
+	  fuse_reply_err(req, ENOENT);
+	  return;
+	}
+	debug_printf("FUSE:reply_attr:time:%lu %lu %lu\n",
 	   st.st_atime, st.st_mtime, st.st_ctime);
-    fuse_reply_attr(req, &st, 0.0);
+	fuse_reply_attr(req, &st, 0.0);
 }
 
 //
@@ -153,10 +153,10 @@ fuseserver_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 	printf("FUSE:fuseserver_setattr 0x%x\n", to_set);
 	if (FUSE_SET_ATTR_SIZE & to_set) {
 		printf("FUSE:fuseserver_setattr set size to %zu\n", attr->st_size);
+// You fill this in for Lab 2
+#if 1
 		struct stat st;
 		yfs_client::status ret;
-// You fill this in for Lab 2
-#if 0
 // Change the above line to "#if 1", and your code goes here
 // Note: fill st using getattr before fuse_reply_attr
 		ret = getattr(ino, st);
@@ -164,7 +164,15 @@ fuseserver_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 			fuse_reply_err(req, ENOENT);
 			return;
 		}
-		// TODO: change the size of file buffer
+
+		ret = yfs->setfilebuf(ino, NULL, attr->st_size);
+		if(ret != yfs_client::OK) {
+			// BUGBUG: error value?
+			fuse_reply_err(req, ENOENT);
+			return;
+		}
+
+		// TODO: change atime/mtime of the file
 
 		st.st_size = attr->st_size;
 		fuse_reply_attr(req, &st, 0);
@@ -279,7 +287,7 @@ fuseserver_createhelper(fuse_ino_t parent, const char *name,
 
 	e->ino = fileinum;
 	debug_printf("    create -> %lu %lu %lu\n",
-	       info.atime, info.mtime, info.ctime);
+		   info.atime, info.mtime, info.ctime);
 	return yfs_client::OK;
 }
 
@@ -302,7 +310,7 @@ fuseserver_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 }
 
 void fuseserver_mknod( fuse_req_t req, fuse_ino_t parent,
-		       const char *name, mode_t mode, dev_t rdev ) {
+			   const char *name, mode_t mode, dev_t rdev ) {
 	struct fuse_entry_param e;
 	yfs_client::status ret;
 	if( (ret = fuseserver_createhelper( parent, name, mode, &e )) == yfs_client::OK ) {
@@ -350,19 +358,19 @@ fuseserver_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 
 
 struct dirbuf {
-    char *p;
-    size_t size;
+	char *p;
+	size_t size;
 };
 
 void dirbuf_add(struct dirbuf *b, const char *name, fuse_ino_t ino)
 {
-    struct stat stbuf;
-    size_t oldsize = b->size;
-    b->size += fuse_dirent_size(strlen(name));
-    b->p = (char *) realloc(b->p, b->size);
-    memset(&stbuf, 0, sizeof(stbuf));
-    stbuf.st_ino = ino;
-    fuse_add_dirent(b->p + oldsize, name, &stbuf, b->size);
+	struct stat stbuf;
+	size_t oldsize = b->size;
+	b->size += fuse_dirent_size(strlen(name));
+	b->p = (char *) realloc(b->p, b->size);
+	memset(&stbuf, 0, sizeof(stbuf));
+	stbuf.st_ino = ino;
+	fuse_add_dirent(b->p + oldsize, name, &stbuf, b->size);
 }
 
 #define min(x, y) ((x) < (y) ? (x) : (y))
@@ -371,9 +379,9 @@ int reply_buf_limited(fuse_req_t req, const char *buf, size_t bufsize,
 	  off_t off, size_t maxsize)
 {
   if ((size_t)off < bufsize)
-    return fuse_reply_buf(req, buf + off, min(bufsize - off, maxsize));
+	return fuse_reply_buf(req, buf + off, min(bufsize - off, maxsize));
   else
-    return fuse_reply_buf(req, NULL, 0);
+	return fuse_reply_buf(req, NULL, 0);
 }
 
 //
@@ -412,9 +420,9 @@ fuseserver_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 
 	files_in_parent = yfs->readdir(inum);
 	for (it_dirent = files_in_parent.begin();
-	     it_dirent != files_in_parent.end(); it_dirent++) {
+		 it_dirent != files_in_parent.end(); it_dirent++) {
 		debug_printf("FUSE: readdir: found-file: %s\n",
-		       (*it_dirent)->name.c_str());
+			   (*it_dirent)->name.c_str());
 		dirbuf_add(&b, (*it_dirent)->name.c_str(), (*it_dirent)->inum);
 	}
 
@@ -425,7 +433,7 @@ fuseserver_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 
 void
 fuseserver_open(fuse_req_t req, fuse_ino_t ino,
-     struct fuse_file_info *fi)
+	 struct fuse_file_info *fi)
 {
   fuse_reply_open(req, fi);
 }
@@ -442,7 +450,7 @@ fuseserver_open(fuse_req_t req, fuse_ino_t ino,
 //
 void
 fuseserver_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name,
-     mode_t mode)
+	 mode_t mode)
 {
   struct fuse_entry_param e;
   // In yfs, timeouts are always set to 0.0, and generations are always set to 0
@@ -504,8 +512,8 @@ main(int argc, char *argv[])
   setvbuf(stdout, NULL, _IONBF, 0);
 
   if(argc != 4){
-    fprintf(stderr, "Usage: yfs_client <mountpoint> <port-extent-server> <port-lock-server>\n");
-    exit(1);
+	fprintf(stderr, "Usage: yfs_client <mountpoint> <port-extent-server> <port-lock-server>\n");
+	exit(1);
   }
   mountpoint = argv[1];
 
@@ -550,31 +558,31 @@ main(int argc, char *argv[])
   int res = fuse_parse_cmdline( &args, &mountpoint, 0 /*multithreaded*/,
 	&foreground );
   if( res == -1 ) {
-    fprintf(stderr, "fuse_parse_cmdline failed\n");
-    return 0;
+	fprintf(stderr, "fuse_parse_cmdline failed\n");
+	return 0;
   }
 
   args.allocated = 0;
 
   fd = fuse_mount(mountpoint, &args);
   if(fd == -1){
-    fprintf(stderr, "fuse_mount failed\n");
-    exit(1);
+	fprintf(stderr, "fuse_mount failed\n");
+	exit(1);
   }
 
   struct fuse_session *se;
 
   se = fuse_lowlevel_new(&args, &fuseserver_oper, sizeof(fuseserver_oper),
-       NULL);
+	   NULL);
   if(se == 0){
-    fprintf(stderr, "fuse_lowlevel_new failed\n");
-    exit(1);
+	fprintf(stderr, "fuse_lowlevel_new failed\n");
+	exit(1);
   }
 
   struct fuse_chan *ch = fuse_kern_chan_new(fd);
   if (ch == NULL) {
-    fprintf(stderr, "fuse_kern_chan_new failed\n");
-    exit(1);
+	fprintf(stderr, "fuse_kern_chan_new failed\n");
+	exit(1);
   }
 
   fuse_session_add_chan(se, ch);
