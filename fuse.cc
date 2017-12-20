@@ -18,6 +18,11 @@
 #include "lang/verify.h"
 #include "yfs_client.h"
 
+
+#define DEBUG 1
+#define debug_printf(...) \
+	do { if (DEBUG) fprintf(stdout, __VA_ARGS__); } while (0)
+
 int myid;
 yfs_client *yfs;
 
@@ -58,7 +63,7 @@ getattr(yfs_client::inum inum, struct stat &st)
   bzero(&st, sizeof(st));
 
   st.st_ino = inum;
-  printf("FUSE: getattr %016llx %d\n", inum, yfs->isfile(inum));
+  debug_printf("FUSE: getattr %016llx %d\n", inum, yfs->isfile(inum));
   if(yfs->isfile(inum)){
 	  yfs_client::fileinfo info;
 	  ret = yfs->getfile(inum, info);
@@ -70,7 +75,7 @@ getattr(yfs_client::inum inum, struct stat &st)
 	  st.st_mtime = info.mtime;
 	  st.st_ctime = info.ctime;
 	  st.st_size = info.size;
-	  printf("   getattr -> time:%lu %lu %lu size:%llu\n",
+	  debug_printf("   getattr -> time:%lu %lu %lu size:%llu\n",
 		 info.atime, info.mtime, info.ctime, info.size);
   } else {
 	  yfs_client::dirinfo info;
@@ -81,7 +86,7 @@ getattr(yfs_client::inum inum, struct stat &st)
 		  st.st_nlink = 2;
 		  st.st_mtime = st.st_ctime = st.st_atime = time(NULL);
 		  ret = yfs_client::OK;
-		  printf("   getattr -> dummy time:\n");
+		  debug_printf("   getattr -> dummy time:\n");
 		  return ret;
 	  }
 	  st.st_mode = S_IFDIR | 0777;
@@ -89,7 +94,7 @@ getattr(yfs_client::inum inum, struct stat &st)
 	  st.st_atime = info.atime;
 	  st.st_mtime = info.mtime;
 	  st.st_ctime = info.ctime;
-	  printf("   getattr -> time:%lu %lu %lu\n",
+	  debug_printf("   getattr -> time:%lu %lu %lu\n",
 		 info.atime, info.mtime, info.ctime);
   }
   return yfs_client::OK;
@@ -123,7 +128,7 @@ fuseserver_getattr(fuse_req_t req, fuse_ino_t ino,
       fuse_reply_err(req, ENOENT);
       return;
     }
-    printf("FUSE:reply_attr:time:%lu %lu %lu\n",
+    debug_printf("FUSE:reply_attr:time:%lu %lu %lu\n",
 	   st.st_atime, st.st_mtime, st.st_ctime);
     fuse_reply_attr(req, &st, 0.0);
 }
@@ -145,21 +150,30 @@ void
 fuseserver_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 		   int to_set, struct fuse_file_info *fi)
 {
-  printf("fuseserver_setattr 0x%x\n", to_set);
-  if (FUSE_SET_ATTR_SIZE & to_set) {
-    printf("   fuseserver_setattr set size to %zu\n", attr->st_size);
-    struct stat st;
-    // You fill this in for Lab 2
+	printf("FUSE:fuseserver_setattr 0x%x\n", to_set);
+	if (FUSE_SET_ATTR_SIZE & to_set) {
+		printf("FUSE:fuseserver_setattr set size to %zu\n", attr->st_size);
+		struct stat st;
+		yfs_client::status ret;
+// You fill this in for Lab 2
 #if 0
-    // Change the above line to "#if 1", and your code goes here
-    // Note: fill st using getattr before fuse_reply_attr
-    fuse_reply_attr(req, &st, 0);
+// Change the above line to "#if 1", and your code goes here
+// Note: fill st using getattr before fuse_reply_attr
+		ret = getattr(ino, st);
+		if(ret != yfs_client::OK){
+			fuse_reply_err(req, ENOENT);
+			return;
+		}
+		// TODO: change the size of file buffer
+
+		st.st_size = attr->st_size;
+		fuse_reply_attr(req, &st, 0);
 #else
-    fuse_reply_err(req, ENOSYS);
+		fuse_reply_err(req, ENOSYS);
 #endif
-  } else {
-    fuse_reply_err(req, ENOSYS);
-  }
+	} else {
+		fuse_reply_err(req, ENOSYS);
+	}
 }
 
 //
@@ -264,7 +278,7 @@ fuseserver_createhelper(fuse_ino_t parent, const char *name,
 		return ret;
 
 	e->ino = fileinum;
-	printf("    create -> %lu %lu %lu\n",
+	debug_printf("    create -> %lu %lu %lu\n",
 	       info.atime, info.mtime, info.ctime);
 	return yfs_client::OK;
 }
@@ -321,7 +335,7 @@ fuseserver_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 	// You fill this in for Lab 2
 	ret = yfs->lookup(parent, name, fileinum);
 	if (ret == yfs_client::EXIST) {
-		printf("FUSE: lookup: exist\n");
+		debug_printf("FUSE: lookup: exist\n");
 		getattr(fileinum, e.attr);
 		//
 		// MUST set ino or 'ls -l' command cannot show file attributes
@@ -329,7 +343,7 @@ fuseserver_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 		e.ino = fileinum;
 		fuse_reply_entry(req, &e);
 	} else {
-		printf("FUSE: lookup: noent\n");
+		debug_printf("FUSE: lookup: noent\n");
 		fuse_reply_err(req, ENOENT);
 	}
 }
@@ -381,7 +395,7 @@ fuseserver_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 	std::list<yfs_client::dirent *> files_in_parent;
 	std::list<yfs_client::dirent *>::iterator it_dirent;
 
-	printf("FUSE: readdir ino=%lu\n", ino);
+	debug_printf("FUSE: readdir ino=%lu\n", ino);
 
 	if(!yfs->isdir(inum)){
 		fuse_reply_err(req, ENOTDIR);
@@ -399,7 +413,7 @@ fuseserver_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 	files_in_parent = yfs->readdir(inum);
 	for (it_dirent = files_in_parent.begin();
 	     it_dirent != files_in_parent.end(); it_dirent++) {
-		printf("FUSE: readdir: found-file: %s\n",
+		debug_printf("FUSE: readdir: found-file: %s\n",
 		       (*it_dirent)->name.c_str());
 		dirbuf_add(&b, (*it_dirent)->name.c_str(), (*it_dirent)->inum);
 	}
