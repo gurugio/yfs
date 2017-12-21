@@ -29,7 +29,9 @@ main(int argc, char *argv[])
 
   server.reg(extent_protocol::get, &ls, &extent_server::get);
   server.reg(extent_protocol::getattr, &ls, &extent_server::getattr);
+#if 0
   server.reg(extent_protocol::putattr, &ls, &extent_server::putattr);
+#endif
   server.reg(extent_protocol::put, &ls, &extent_server::put);
   server.reg(extent_protocol::remove, &ls, &extent_server::remove);
 

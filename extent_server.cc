@@ -100,6 +100,7 @@ int extent_server::getattr(extent_protocol::extentid_t id,
 	return extent_protocol::OK;
 }
 
+#if 0
 int extent_server::putattr(extent_protocol::extentid_t id,
 						   extent_protocol::attr &a)
 {
@@ -125,6 +126,7 @@ int extent_server::putattr(extent_protocol::extentid_t id,
 	printf("es: putattr: ok\n");
 	return extent_protocol::OK;
 }
+#endif
 
 int extent_server::remove(extent_protocol::extentid_t id, int &)
 {

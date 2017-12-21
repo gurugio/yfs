@@ -59,6 +59,7 @@ class yfs_client {
   int setfileattr(inum, struct stat &);
   void resizefilebuf_helper(struct fileent *, unsigned int);
   int writefilebuf(inum, const char *, size_t, off_t);
+  int readfilebuf(inum, std::string &, size_t, off_t);
 };
 
 #endif

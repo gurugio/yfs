@@ -200,13 +200,19 @@ void
 fuseserver_read(fuse_req_t req, fuse_ino_t ino, size_t size,
 		off_t off, struct fuse_file_info *fi)
 {
-  // You fill this in for Lab 2
-#if 0
-  std::string buf;
-  // Change the above "#if 0" to "#if 1", and your code goes here
-  fuse_reply_buf(req, buf.data(), buf.size());
+	// You fill this in for Lab 2
+#if 1
+	yfs_client::status ret;
+	std::string buf;
+	// Change the above "#if 0" to "#if 1", and your code goes here
+
+	ret = yfs->readfilebuf(ino, buf, size, off);
+	if (ret < 0) {
+		fuse_reply_err(req, EINVAL);
+	}
+	fuse_reply_buf(req, buf.data(), buf.size());
 #else
-  fuse_reply_err(req, ENOSYS);
+	fuse_reply_err(req, ENOSYS);
 #endif
 }
 
@@ -250,9 +256,7 @@ fuseserver_write(fuse_req_t req, fuse_ino_t ino,
 		return;
 	}
 
-	// TODO: copy data
-
-
+	size = yfs->writefilebuf(ino, buf, size, off);
 	fuse_reply_write(req, size);
 #else
 	fuse_reply_err(req, ENOSYS);

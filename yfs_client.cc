@@ -54,22 +54,33 @@ yfs_client::isdir(inum inum)
 }
 
 int
-yfs_client::getfile(inum inum, fileinfo &fin)
+yfs_client::getfile(inum file_inum, fileinfo &fin)
 {
-  int r = OK;
+	std::map<inum, fileent *>::iterator it_fileent;
+	struct fileent *entry;
+	extent_protocol::attr a;
+	int r = OK;
 
-  printf("yfs:getfile %016llx\n", inum);
-  extent_protocol::attr a;
-  if (ec->getattr(inum, a) != extent_protocol::OK) {
-	r = IOERR;
-	goto release;
-  }
+	printf("yfs:getfile %016llx\n", file_inum);
 
-  fin.atime = a.atime;
-  fin.mtime = a.mtime;
-  fin.ctime = a.ctime;
-  fin.size = a.size;
-  printf("yfs:getfile %016llx -> sz %llu\n", inum, fin.size);
+	if (ec->getattr(file_inum, a) != extent_protocol::OK) {
+		r = IOERR;
+		goto release;
+	}
+
+	// BUGBUG:file size is stored in fileent, not extent server
+	it_fileent = files.find(file_inum);
+	if (it_fileent == files.end()) {
+		return NOENT;
+	}
+
+	entry = it_fileent->second;
+
+	fin.atime = a.atime;
+	fin.mtime = a.mtime;
+	fin.ctime = a.ctime;
+	fin.size = entry->size;
+	printf("yfs:getfile %016llx -> sz %llu\n", file_inum, fin.size);
 
  release:
 
@@ -170,11 +181,11 @@ int yfs_client::createfile(inum parent_inum, inum file_inum,
 		r = IOERR;
 		goto exit_error;
 	}
-	a.mtime = a.ctime = time(NULL);
-	if (ec && ec->putattr(parent_inum, a) != extent_protocol::OK) {
-		r = IOERR;
-		goto exit_error;
-	}
+	// a.mtime = a.ctime = time(NULL);
+	// if (ec && ec->putattr(parent_inum, a) != extent_protocol::OK) {
+	//	r = IOERR;
+	//	goto exit_error;
+	// }
 
 	// create file buffer
 	new_fileent = new fileent;
@@ -221,7 +232,6 @@ int yfs_client::setfileattr(inum file_inum, struct stat &st)
 {
 	std::map<inum, fileent *>::iterator it_fileent;
 	struct fileent *entry;
-	extent_protocol::attr a;
 
 	printf("yfs:setfileattr: inum=%llx mtime=%lu size=%u\n",
 		   file_inum, st.st_mtime, (unsigned int)st.st_size);
@@ -233,7 +243,7 @@ int yfs_client::setfileattr(inum file_inum, struct stat &st)
 
 	entry = it_fileent->second;
 	resizefilebuf_helper(entry, st.st_size);
-
+#if 0
 	a.mtime = st.st_mtime;
 	a.ctime = st.st_ctime;
 	a.atime = st.st_atime;
@@ -244,7 +254,7 @@ int yfs_client::setfileattr(inum file_inum, struct stat &st)
 		printf("yfs:resizefilebuf: extent error\n");
 		return RPCERR;
 	}
-
+#endif
 	return OK;
 }
 
@@ -258,16 +268,45 @@ int yfs_client::writefilebuf(inum file_inum, const char *buf,
 
 	it_fileent = files.find(file_inum);
 	if (it_fileent == files.end()) {
-		return NOENT;
+		return -1;
 	}
 
-	printf("yfs:writefilebuf: found file\n");
 	entry = it_fileent->second;
 
 	resizefilebuf_helper(entry, size + off);
 	if (entry->size < (size + off)) {
 		printf("\n\n\n########### yfs:writefilebuf:resize error\n\n\n\n");
 	}
+
 	memcpy(&entry->buf[off], buf, size);
+	return size;
+}
+
+static char tmp[] = "hello";
+
+int yfs_client::readfilebuf(inum file_inum, std::string &buf,
+							size_t size, off_t off)
+{
+	std::map<inum, fileent *>::iterator it_fileent;
+	struct fileent *entry;
+
+	printf("yfs:readfilebuf: inum=%llu size=%u\n", file_inum, (int)size);
+
+	it_fileent = files.find(file_inum);
+	if (it_fileent == files.end()) {
+		return -1;
+	}
+
+	printf("yfs:readfilebuf: found file\n");
+	entry = it_fileent->second;
+
+	if (off > entry->size) {
+		return 0;
+	} else if (size + off > entry->size) {
+		size = entry->size - off;
+	}
+
+	buf = std::string(&entry->buf[off], size);
+	//buf = std::string(tmp, 5);
 	return size;
 }
