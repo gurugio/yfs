@@ -15,7 +15,7 @@ extent_client::extent_client(std::string dst)
   make_sockaddr(dst.c_str(), &dstsock);
   cl = new rpcc(dstsock);
   if (cl->bind() != 0) {
-    printf("extent_client: bind failed\n");
+	printf("extent_client: bind failed\n");
   }
 }
 
@@ -28,8 +28,8 @@ extent_client::get(extent_protocol::extentid_t eid, std::string &buf)
 }
 
 extent_protocol::status
-extent_client::getattr(extent_protocol::extentid_t eid, 
-		       extent_protocol::attr &attr)
+extent_client::getattr(extent_protocol::extentid_t eid,
+			   extent_protocol::attr &attr)
 {
   extent_protocol::status ret = extent_protocol::OK;
   ret = cl->call(extent_protocol::getattr, eid, attr);
@@ -38,7 +38,7 @@ extent_client::getattr(extent_protocol::extentid_t eid,
 
 extent_protocol::status
 extent_client::putattr(extent_protocol::extentid_t eid,
-		       extent_protocol::attr attr)
+			   extent_protocol::attr &attr)
 {
   extent_protocol::status ret = extent_protocol::OK;
   ret = cl->call(extent_protocol::putattr, eid, attr);
@@ -62,5 +62,3 @@ extent_client::remove(extent_protocol::extentid_t eid)
   ret = cl->call(extent_protocol::remove, eid, r);
   return ret;
 }
-
-

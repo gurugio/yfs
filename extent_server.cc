@@ -38,7 +38,7 @@ int extent_server::put(extent_protocol::extentid_t id, std::string buf, int &)
 	file_map->insert(std::make_pair(id, f));
 
 	printf("es:put:insert time=%u\n",
-	       f->file_attr.ctime);
+		   f->file_attr.ctime);
 	pthread_mutex_unlock(&attr_lock);
 	return extent_protocol::OK;
 }
@@ -64,7 +64,7 @@ int extent_server::get(extent_protocol::extentid_t id, std::string &buf)
 	buf = f->file_name;
 	f->file_attr.atime = time(NULL);
 	printf("es:get: name=%s atime=%u\n",
-	       buf.c_str(), f->file_attr.atime);
+		   buf.c_str(), f->file_attr.atime);
 	pthread_mutex_unlock(&attr_lock);
 	return extent_protocol::OK;
 }
@@ -94,19 +94,20 @@ int extent_server::getattr(extent_protocol::extentid_t id,
 	a = f->file_attr;
 
 	printf("es: getattr: id=%llx %u %u %u %u\n",
-	       id, a.atime, a.mtime, a.ctime, a.size);
+		   id, a.atime, a.mtime, a.ctime, a.size);
 
 	pthread_mutex_unlock(&attr_lock);
 	return extent_protocol::OK;
 }
 
 int extent_server::putattr(extent_protocol::extentid_t id,
-			   extent_protocol::attr &a)
+						   extent_protocol::attr &a)
 {
 	struct yfsfile *f;
 	std::map<extent_protocol::extentid_t, struct yfsfile *>::iterator it;
 
-	printf("es: putattr: id=%llx\n", id);
+	printf("es: putattr: id=%llx time:%lu %lu %lu size:%llu\n",
+		   id, a.atime, a.mtime, a.ctime, a.size);
 	pthread_mutex_lock(&attr_lock);
 
 	it = file_map->find(id);

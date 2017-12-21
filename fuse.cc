@@ -165,16 +165,16 @@ fuseserver_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 			return;
 		}
 
-		ret = yfs->resizefilebuf(ino, attr->st_size);
+		// BUGBUG: setdirattr??
+
+		st.st_size = attr->st_size;
+		ret = yfs->setfileattr(ino, st);
 		if(ret != yfs_client::OK) {
-			// BUGBUG: error value?
-			fuse_reply_err(req, ENOENT);
+			fuse_reply_err(req, EACCES);
 			return;
 		}
 
 		// TODO: change atime/mtime of the file
-
-		st.st_size = attr->st_size;
 		fuse_reply_attr(req, &st, 0);
 #else
 		fuse_reply_err(req, ENOSYS);
@@ -242,14 +242,16 @@ fuseserver_write(fuse_req_t req, fuse_ino_t ino,
 		return;
 	}
 
-	ret = yfs->resizefilebuf(ino, size);
+	if (st.st_size < off + (off_t)size)
+		st.st_size = off + size;
+	ret = yfs->setfileattr(ino, st);
 	if(ret != yfs_client::OK) {
-		// BUGBUG: error value?
-		fuse_reply_err(req, ENOENT);
+		fuse_reply_err(req, EACCES);
 		return;
 	}
 
-	// TODO: change mtime of the file
+	// TODO: copy data
+
 
 	fuse_reply_write(req, size);
 #else

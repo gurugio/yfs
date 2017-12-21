@@ -194,34 +194,80 @@ exit_error:
 	return r;
 }
 
-int yfs_client::resizefilebuf(inum file_inum, unsigned int size)
+void yfs_client::resizefilebuf_helper(struct fileent *entry,
+									  unsigned int newsize)
+{
+	char *newbuf;
+
+	// BUGBUG: don't care memory allocation failure
+	if (newsize > entry->size) {
+		newbuf = (char *)calloc(newsize, sizeof(char));
+		memcpy(newbuf, entry->buf, entry->size);
+		free(entry->buf);
+		entry->buf = newbuf;
+		entry->size = newsize;
+	} else if (newsize < entry->size) {
+		newbuf = (char *)calloc(newsize, sizeof(char));
+		memcpy(newbuf, entry->buf, newsize);
+		free(entry->buf);
+		entry->buf = newbuf;
+		entry->size = newsize;
+	} else {
+		// do nothing
+	}
+}
+
+int yfs_client::setfileattr(inum file_inum, struct stat &st)
 {
 	std::map<inum, fileent *>::iterator it_fileent;
 	struct fileent *entry;
+	extent_protocol::attr a;
 
-	printf("yfs:setfilebuf: inum=%llu size=%u\n", file_inum, size);
+	printf("yfs:setfileattr: inum=%llx mtime=%lu size=%u\n",
+		   file_inum, st.st_mtime, (unsigned int)st.st_size);
 
 	it_fileent = files.find(file_inum);
 	if (it_fileent == files.end()) {
 		return NOENT;
 	}
 
-	printf("yfs:setfilebuf: found file\n");
 	entry = it_fileent->second;
+	resizefilebuf_helper(entry, st.st_size);
 
-	if (size > entry->size) {
-		char *newbuf = (char *)calloc(size, sizeof(char));
-		memcpy(newbuf, entry->buf, entry->size);
-		free(entry->buf);
-		entry->buf = newbuf;
-	} else if (size < entry->size) {
-		char *newbuf = (char *)calloc(size, sizeof(char));
-		memcpy(newbuf, entry->buf, size);
-		free(entry->buf);
-		entry->buf == newbuf;
-	} else {
-		// do nothing
+	a.mtime = st.st_mtime;
+	a.ctime = st.st_ctime;
+	a.atime = st.st_atime;
+	a.size  = st.st_size;
+	printf("yfs:setfileattr: time:%lu %lu %lu size:%llu\n",
+		   a.atime, a.mtime, a.ctime, a.size);
+	if (ec && ec->putattr(file_inum, a) != extent_protocol::OK) {
+		printf("yfs:resizefilebuf: extent error\n");
+		return RPCERR;
 	}
 
 	return OK;
+}
+
+int yfs_client::writefilebuf(inum file_inum, const char *buf,
+							 size_t size, off_t off)
+{
+	std::map<inum, fileent *>::iterator it_fileent;
+	struct fileent *entry;
+
+	printf("yfs:writefilebuf: inum=%llu size=%u\n", file_inum, (int)size);
+
+	it_fileent = files.find(file_inum);
+	if (it_fileent == files.end()) {
+		return NOENT;
+	}
+
+	printf("yfs:writefilebuf: found file\n");
+	entry = it_fileent->second;
+
+	resizefilebuf_helper(entry, size + off);
+	if (entry->size < (size + off)) {
+		printf("\n\n\n########### yfs:writefilebuf:resize error\n\n\n\n");
+	}
+	memcpy(&entry->buf[off], buf, size);
+	return size;
 }

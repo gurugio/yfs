@@ -13,15 +13,15 @@ main(int argc, char *argv[])
   int count = 0;
 
   if(argc != 2){
-    fprintf(stderr, "Usage: %s port\n", argv[0]);
-    exit(1);
+	fprintf(stderr, "Usage: %s port\n", argv[0]);
+	exit(1);
   }
 
   setvbuf(stdout, NULL, _IONBF, 0);
 
   char *count_env = getenv("RPC_COUNT");
   if(count_env != NULL){
-    count = atoi(count_env);
+	count = atoi(count_env);
   }
 
   rpcs server(atoi(argv[1]), count);
@@ -34,5 +34,5 @@ main(int argc, char *argv[])
   server.reg(extent_protocol::remove, &ls, &extent_server::remove);
 
   while(1)
-    sleep(1000);
+	sleep(1000);
 }
