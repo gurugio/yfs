@@ -56,7 +56,7 @@ class yfs_client {
   int lookup(inum, const char *, inum &);
   int createfile(inum, inum, const char *, mode_t);
   std::list<dirent *> readdir(inum);
-  int setfilebuf(inum, char *, unsigned int);
+  int resizefilebuf(inum, unsigned int);
 };
 
 #endif

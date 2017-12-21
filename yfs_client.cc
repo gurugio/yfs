@@ -194,7 +194,7 @@ exit_error:
 	return r;
 }
 
-int yfs_client::setfilebuf(inum file_inum, char *data, unsigned int size)
+int yfs_client::resizefilebuf(inum file_inum, unsigned int size)
 {
 	std::map<inum, fileent *>::iterator it_fileent;
 	struct fileent *entry;
@@ -221,10 +221,6 @@ int yfs_client::setfilebuf(inum file_inum, char *data, unsigned int size)
 		entry->buf == newbuf;
 	} else {
 		// do nothing
-	}
-
-	if (data != NULL) {
-		// TODO: copy data to file buffer
 	}
 
 	return OK;
