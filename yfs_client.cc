@@ -206,7 +206,7 @@ exit_error:
 }
 
 void yfs_client::resizefilebuf_helper(struct fileent *entry,
-									  unsigned int newsize)
+				      unsigned int newsize)
 {
 	char *newbuf;
 
@@ -264,7 +264,8 @@ int yfs_client::writefilebuf(inum file_inum, const char *buf,
 	std::map<inum, fileent *>::iterator it_fileent;
 	struct fileent *entry;
 
-	printf("yfs:writefilebuf: inum=%llu size=%u\n", file_inum, (int)size);
+	printf("yfs:writefilebuf: inum=%llu size=%u off=%u\n",
+	       file_inum, (int)size, (int)off);
 
 	it_fileent = files.find(file_inum);
 	if (it_fileent == files.end()) {
@@ -273,16 +274,19 @@ int yfs_client::writefilebuf(inum file_inum, const char *buf,
 
 	entry = it_fileent->second;
 
-	resizefilebuf_helper(entry, size + off);
-	if (entry->size < (size + off)) {
-		printf("\n\n\n########### yfs:writefilebuf:resize error\n\n\n\n");
+	if ((size + off) > entry->size) {
+		char *newbuf;
+		newbuf = (char *)calloc((size + off), sizeof(char));
+		memcpy(newbuf, entry->buf, entry->size);
+		free(entry->buf);
+		entry->buf = newbuf;
+		entry->size = (size + off);
 	}
+	printf("yfs:writefilebuf: newsize=%u\n", (int)entry->size);
 
 	memcpy(&entry->buf[off], buf, size);
 	return size;
 }
-
-static char tmp[] = "hello";
 
 int yfs_client::readfilebuf(inum file_inum, std::string &buf,
 							size_t size, off_t off)
