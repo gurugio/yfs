@@ -43,6 +43,12 @@ class yfs_client {
 
   int getfile(inum, fileinfo &);
   int getdir(inum, dirinfo &);
+
+  inum get_nextid(int);
+  int createfile(inum, const char *, inum *);
+  int lookup(inum, const char *, inum &);
+  int add_dirent(inum, const char *, inum);
+  int readdir(inum, struct dirent **, int *);
 };
 
 #endif 
