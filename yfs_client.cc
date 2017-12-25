@@ -63,7 +63,7 @@ yfs_client::getfile(inum inum, fileinfo &fin)
   printf("yfs:getfile: inum=%016llx\n", inum);
   extent_protocol::attr a;
   if (ec->getattr(inum, a) != extent_protocol::OK) {
-	  printf("yfs:getfile: fail\n");
+	  DPRINTF("yfs:getfile: fail\n");
     r = IOERR;
     goto release;
   }
@@ -72,7 +72,7 @@ yfs_client::getfile(inum inum, fileinfo &fin)
   fin.mtime = a.mtime;
   fin.ctime = a.ctime;
   fin.size = a.size;
-  printf("yfs:getfile: %016llx -> sz %llu\n", inum, fin.size);
+  DPRINTF("yfs:getfile: %016llx -> sz %llu\n", inum, fin.size);
 
  release:
 
@@ -87,14 +87,14 @@ yfs_client::getdir(inum inum, dirinfo &din)
   printf("yfs:getdir: inum=%016llx\n", inum);
   extent_protocol::attr a;
   if (ec->getattr(inum, a) != extent_protocol::OK) {
-	  printf("yfs:getfile: fail\n");
+	  DPRINTF("yfs:getfile: fail\n");
     r = IOERR;
     goto release;
   }
   din.atime = a.atime;
   din.mtime = a.mtime;
   din.ctime = a.ctime;
-  printf("yfs:getdir: %lu %lu %lu\n", din.atime, din.mtime, din.ctime);
+  DPRINTF("yfs:getdir: %lu %lu %lu\n", din.atime, din.mtime, din.ctime);
  release:
   return r;
 }
@@ -116,7 +116,7 @@ int yfs_client::add_dirent(inum dir_inum, const char *name, inum file_inum)
 	buf.append(name);
 	buf.push_back('\0');
 
-	{// for debugging
+#if DEBUG
 		const char *ptr = buf.c_str();
 		printf("dir-inum=%x buf=", (int)dir_inum);
 		for (unsigned int i = 0; i < buf.length(); i++) {
@@ -126,11 +126,11 @@ int yfs_client::add_dirent(inum dir_inum, const char *name, inum file_inum)
 				printf("%c", ptr[i]);
 		}
 		printf("\n");
-	}// for debugging
+#endif
 	
 	if (ec->put(dir_inum, buf) != extent_protocol::OK)
 		return IOERR;
-	printf("yfs:add_dirent: ret=%d\n", r);
+	DPRINTF("yfs:add_dirent: ret=%d\n", r);
 	return r;
 }
 
@@ -139,12 +139,12 @@ int yfs_client::createfile(inum parent_inum,
 {
 	int r = OK;
 	std::string filename;
-	printf("yfs: create: %016llx %s\n", parent_inum, name);
+	DPRINTF("yfs: create: %016llx %s\n", parent_inum, name);
 	inum finum = get_nextid(1);
 
 	printf("yfs:create: new fileinum=%016llx\n", finum);
 	if (add_dirent(parent_inum, name, finum) != extent_protocol::OK) {
-		printf("yfs:create: fail to add dirent\n");
+		DPRINTF("yfs:create: fail to add dirent\n");
 		return IOERR;
 	}
 
@@ -152,11 +152,11 @@ int yfs_client::createfile(inum parent_inum,
 
 	filename = name;
 	if (ec->put(finum, filename) != extent_protocol::OK) {
-		printf("yfs:create: fail to create file\n");
+		DPRINTF("yfs:create: fail to create file\n");
 		return IOERR;
 	}
 
-	printf("yfs: create: exit with %d\n", r);
+	DPRINTF("yfs: create: exit with %d\n", r);
 	return r;
 }
 
@@ -172,13 +172,13 @@ int yfs_client::lookup(inum parent_inum, const char *name, inum &file_inum)
 
 	found = dir_buf.find(name);
 	if (found == std::string::npos) {
-		printf("lookup: NOENT\n");
+		DPRINTF("lookup: NOENT\n");
 		return NOENT;
 	}else {
 		found -= 17;
-		printf("lookup: found inum=%s\n", dir_buf.c_str() + found);
+		DPRINTF("lookup: found inum=%s\n", dir_buf.c_str() + found);
 		file_inum = strtoull(dir_buf.c_str() + found, NULL, 16);
-		printf("lookup: file_inum=%016llx\n", file_inum);
+		DPRINTF("lookup: file_inum=%016llx\n", file_inum);
 	}
 	return EXIST;
 }
@@ -190,23 +190,45 @@ int yfs_client::readdir(inum parent_inum,
 	std::string dir_buf;
 	const char *ptr;
 	int count = 0;
+	struct dirent *entries;
 
 	printf("yfs:readdir: %016llx\n", parent_inum);
 
 	if (ec->get(parent_inum, dir_buf) != extent_protocol::OK)
 		return IOERR;
 
-	printf("yfs:readdir: %d %p\n", dir_buf.length(), dir_buf.c_str());
-
 	ptr = dir_buf.c_str();
-	for (unsigned int i = 0; i < dir_buf.length(); i++) {
-		if (ptr[i] == 0)
-			printf("#");
-		else
-			printf("%c", ptr[i]);
-	}
-	printf("\n");
 
+#if DEBUG
+	{
+		for (unsigned int i = 0; i < dir_buf.length(); i++) {
+			if (ptr[i] == 0)
+				printf("#");
+			else
+				printf("%c", ptr[i]);
+		}
+		printf("\n");
+	}
+#endif
+
+	for (unsigned int i = 0; i <= dir_buf.length(); i++) {
+		if (ptr[i] == 0)
+			count++;
+	}
+
+	count /= 2;
+	entries = (struct dirent *)calloc(count, sizeof(struct dirent));
+
+	for (int i = 0; i < count; i++) {
+		DPRINTF("yfs:readdir: inum=%s\n", ptr);
+		entries[i].inum = strtoull(ptr, NULL, 16);
+		ptr += (strlen(ptr) + 1);
+		DPRINTF("yfs:readdir: name=%s\n", ptr);
+		entries[i].name = ptr;
+		ptr += (strlen(ptr) + 1);
+	}
+
+	(*dir_entries) = entries;
 	(*num_entries) = count;
 	return OK;
 }

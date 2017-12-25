@@ -6,6 +6,10 @@
 #include "extent_client.h"
 #include <vector>
 
+#define DEBUG 0
+#define DPRINTF(...) do {						\
+		if (DEBUG) printf(__VA_ARGS__);			\
+	} while (0);
 
 class yfs_client {
   extent_client *ec;

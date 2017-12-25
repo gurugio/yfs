@@ -57,7 +57,7 @@ getattr(yfs_client::inum inum, struct stat &st)
      st.st_mtime = info.mtime;
      st.st_ctime = info.ctime;
      st.st_size = info.size;
-     printf("   getattr -> %llu\n", info.size);
+     DPRINTF("   getattr -> %llu\n", info.size);
    } else {
      yfs_client::dirinfo info;
      ret = yfs->getdir(inum, info);
@@ -68,7 +68,7 @@ getattr(yfs_client::inum inum, struct stat &st)
      st.st_atime = info.atime;
      st.st_mtime = info.mtime;
      st.st_ctime = info.ctime;
-     printf("   getattr -> %lu %lu %lu\n", info.atime, info.mtime, info.ctime);
+     DPRINTF("   getattr -> %lu %lu %lu\n", info.atime, info.mtime, info.ctime);
    }
    return yfs_client::OK;
 }
@@ -123,7 +123,7 @@ fuseserver_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 {
   printf("fuseserver_setattr 0x%x\n", to_set);
   if (FUSE_SET_ATTR_SIZE & to_set) {
-    printf("   fuseserver_setattr set size to %zu\n", attr->st_size);
+    DPRINTF("   fuseserver_setattr set size to %zu\n", attr->st_size);
     // You fill this in for Lab 2
 #if 0
     struct stat st;
@@ -234,7 +234,7 @@ fuseserver_createhelper(fuse_ino_t parent, const char *name,
 	e->entry_timeout = 0.0;
 	e->generation = 0;
 
-	printf("    create -> %lu %lu %lu\n",
+	DPRINTF("    create -> %lu %lu %lu\n",
 		   e->attr.st_atime, e->attr.st_mtime, e->attr.st_ctime);
 	return yfs_client::OK;
 }
@@ -283,6 +283,7 @@ fuseserver_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 	yfs_client::inum fileinum;
 	yfs_client::status ret;
 
+	printf("FUSE:lookup: parent=%016lx\n", parent);
 	// In yfs, timeouts are always set to 0.0, and generations are always set to 0
 	e.attr_timeout = 0.0;
 	e.entry_timeout = 0.0;
@@ -290,9 +291,9 @@ fuseserver_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 
 	ret = yfs->lookup(parent, name, fileinum);
 	if (ret == yfs_client::EXIST) {
-		printf("FUSE: lookup: exist\n");
+		DPRINTF("FUSE: lookup: exist\n");
 		getattr(fileinum, e.attr);
-		printf("FUSE: lookup: inum=%016llx mtime=%lu\n",
+		DPRINTF("FUSE: lookup: inum=%016llx mtime=%lu\n",
 			   fileinum, e.attr.st_atime);
 		//
 		// MUST set ino or 'ls -l' command cannot show file attributes
@@ -300,7 +301,7 @@ fuseserver_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 		e.ino = fileinum;
 		fuse_reply_entry(req, &e);
 	} else {
-		printf("FUSE: lookup: noent\n");
+		DPRINTF("FUSE: lookup: noent\n");
 		fuse_reply_err(req, ENOENT);
 	}
 }
@@ -350,7 +351,7 @@ fuseserver_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
   yfs_client::dirent *dir_entries;
   int num_entries;
 
-  printf("fuseserver_readdir\n");
+  printf("fuse:readdir: id=%016lx\n", ino);
 
   if(!yfs->isdir(inum)){
     fuse_reply_err(req, ENOTDIR);
@@ -429,7 +430,7 @@ fuseserver_statfs(fuse_req_t req)
 {
   struct statvfs buf;
 
-  printf("statfs\n");
+  DPRINTF("statfs\n");
 
   memset(&buf, 0, sizeof(buf));
 
