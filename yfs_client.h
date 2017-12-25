@@ -6,6 +6,10 @@
 #include "extent_client.h"
 #include <vector>
 
+#define DEBUG 0
+#define DPRINTF(...) do {						\
+		if (DEBUG) printf(__VA_ARGS__);			\
+	} while (0);
 
 class yfs_client {
   extent_client *ec;
@@ -43,6 +47,15 @@ class yfs_client {
 
   int getfile(inum, fileinfo &);
   int getdir(inum, dirinfo &);
+
+  inum get_nextid(int);
+  int createfile(inum, const char *, inum *);
+  int lookup(inum, const char *, inum &);
+  int add_dirent(inum, const char *, inum);
+  int readdir(inum, struct dirent **, int *);
+  int resizefile(inum, size_t);
+  int writefile(inum, const char *, size_t, off_t);
+  int readfile(inum, size_t, off_t, std::string &);
 };
 
 #endif 
