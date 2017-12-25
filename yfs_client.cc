@@ -232,3 +232,82 @@ int yfs_client::readdir(inum parent_inum,
 	(*num_entries) = count;
 	return OK;
 }
+
+int yfs_client::resizefile(inum file_inum, size_t size)
+{
+	std::string file_buf;
+
+	printf("yfs:resize: inum=%016llx size=%lu\n", file_inum, size);
+
+	if (ec->get(file_inum, file_buf) != extent_protocol::OK)
+		return IOERR;
+
+	file_buf.resize(size);
+
+	if (ec->put(file_inum, file_buf) != extent_protocol::OK) {
+		return IOERR;
+	}
+
+	return OK;
+}
+
+int yfs_client::writefile(inum file_inum, const char *buf,
+						  size_t size, off_t off)
+{
+	std::string file_buf;
+	char *newbuf;
+	int newsize;
+
+	printf("yfs:writefile: inum=%016llx size=%lu off=%lu\n",
+		   file_inum, size, off);
+
+	if (ec->get(file_inum, file_buf) != extent_protocol::OK)
+		return -1;
+
+	DPRINTF("yfs:writefile: orig-len=%d\n",
+		   (int)file_buf.length());
+
+	if (file_buf.length() < (size + off))
+		newsize = size + off;
+	else
+		newsize = file_buf.length();
+
+	newbuf = (char *)calloc(newsize, sizeof(char));
+	memcpy(newbuf, file_buf.c_str(), file_buf.length());
+	memcpy(&newbuf[off], buf, size);
+	file_buf = std::string(newbuf, newsize);
+
+	DPRINTF("yfs:writefile: new-len=%d\n",
+			(int)file_buf.length());
+
+	if (ec->put(file_inum, file_buf) != extent_protocol::OK)
+		return -1;
+
+	free(newbuf);
+	return size;
+}
+
+int yfs_client::readfile(inum file_inum, size_t size,
+						 off_t off, std::string &buf)
+{
+	std::string file_buf;
+	int readsize;
+
+	printf("yfs:readfile: inum=%016llx size=%lu off=%lu\n",
+		   file_inum, size, off);
+
+	if (ec->get(file_inum, file_buf) != extent_protocol::OK)
+		return -1;
+
+	if (off > (int)file_buf.length())
+		readsize = 0;
+	else if (file_buf.length() < off + size)
+		readsize = file_buf.length() - off;
+	else
+		readsize = size;
+
+	DPRINTF("yfs:readfile: readsize=%d\n", readsize);
+	buf = std::string(file_buf.c_str() + off, readsize);
+
+	return readsize;
+}

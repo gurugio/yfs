@@ -53,6 +53,9 @@ class yfs_client {
   int lookup(inum, const char *, inum &);
   int add_dirent(inum, const char *, inum);
   int readdir(inum, struct dirent **, int *);
+  int resizefile(inum, size_t);
+  int writefile(inum, const char *, size_t, off_t);
+  int readfile(inum, size_t, off_t, std::string &);
 };
 
 #endif 
