@@ -160,6 +160,32 @@ int yfs_client::createfile(inum parent_inum,
 	return r;
 }
 
+int yfs_client::createdir(inum parent_inum,
+						   const char *name, inum *dir_inum)
+{
+	int r = OK;
+	std::string dirname;
+	DPRINTF("yfs: createdir: %016llx %s\n", parent_inum, name);
+	inum finum = get_nextid(0);
+
+	printf("yfs:createdir: new fileinum=%016llx\n", finum);
+	if (add_dirent(parent_inum, name, finum) != extent_protocol::OK) {
+		DPRINTF("yfs:createdir: fail to add dirent\n");
+		return IOERR;
+	}
+
+	(*dir_inum) = finum;
+
+	dirname = name;
+	if (ec->put(finum, dirname) != extent_protocol::OK) {
+		DPRINTF("yfs:create: fail to create file\n");
+		return IOERR;
+	}
+
+	DPRINTF("yfs: create: exit with %d\n", r);
+	return r;
+}
+
 int yfs_client::lookup(inum parent_inum, const char *name, inum &file_inum)
 {
 	std::string dir_buf;

@@ -50,6 +50,7 @@ class yfs_client {
 
   inum get_nextid(int);
   int createfile(inum, const char *, inum *);
+  int createdir(inum, const char *, inum *);
   int lookup(inum, const char *, inum &);
   int add_dirent(inum, const char *, inum);
   int readdir(inum, struct dirent **, int *);

@@ -425,17 +425,41 @@ void
 fuseserver_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name,
      mode_t mode)
 {
-  struct fuse_entry_param e;
-  // In yfs, timeouts are always set to 0.0, and generations are always set to 0
-  e.attr_timeout = 0.0;
-  e.entry_timeout = 0.0;
-  e.generation = 0;
-  // Suppress compiler warning of unused e.
-  (void) e;
+	struct fuse_entry_param e;
 
-  // You fill this in for Lab 3
-#if 0
-  fuse_reply_entry(req, &e);
+	// In yfs, timeouts are always set to 0.0, and generations are always set to 0
+	e.attr_timeout = 0.0;
+	e.entry_timeout = 0.0;
+	e.generation = 0;
+
+	// You fill this in for Lab 3
+
+#if 1
+	yfs_client::status ret;
+	yfs_client::inum dir_inum;
+
+	printf("fuse:mkdir: parent=%016lx name=%s\n", parent, name);
+
+	ret = yfs->lookup(parent, name, dir_inum);
+	if (ret == yfs_client::EXIST) {
+		fuse_reply_err(req, EEXIST);
+		return;
+	}
+
+	ret = yfs->createdir(parent, name, &dir_inum);
+	if(ret != yfs_client::OK) {
+		fuse_reply_err(req, ENOENT);
+		return;
+	}
+
+	ret = getattr(dir_inum, e.attr);
+	if(ret != yfs_client::OK) {
+		fuse_reply_err(req, ENOENT);
+		return;
+	}
+
+	e.ino = dir_inum;
+	fuse_reply_entry(req, &e);
 #else
   fuse_reply_err(req, ENOSYS);
 #endif
