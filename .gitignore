@@ -1,0 +1,22 @@
+# Compiled Object files
+*.slo
+*.lo
+*.o
+
+# Compiled Dynamic libraries
+*.so
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+
+# tags cscope
+*tags
+cscope.out
+*.log
+GPATH
+GRTAGS
+GSYMS
+GTAGS
+*.patch
