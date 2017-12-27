@@ -110,6 +110,7 @@ int yfs_client::add_dirent(inum dir_inum, const char *name, inum file_inum)
 
 	// add inum and name
 	sprintf(inum_buf, "%016llx", file_inum);
+	inum_buf[16] = '\0';
 	printf("yfs:add_dirent: inum_buf=%s\n", inum_buf);
 	buf.append(inum_buf);
 	buf.push_back('\0');
@@ -336,4 +337,26 @@ int yfs_client::readfile(inum file_inum, size_t size,
 	buf = std::string(file_buf.c_str() + off, readsize);
 
 	return readsize;
+}
+
+int yfs_client::unlink(inum parent_inum, inum file_inum)
+{
+	int ret = OK;
+	std::string buf;
+	char inum_buf[17]; // 16-digit
+
+	if (ec->get(parent_inum, buf) != extent_protocol::OK)
+		return IOERR;
+
+	sprintf(inum_buf, "%016llx", file_inum);
+	inum_buf[16] = '\0';
+	printf("yfs:unlink file: inumbuf=%016llx inum=%s\n",
+		   inum_buf, );
+
+
+	// find inum_buf in buf
+
+	// remove inum_buf and filename in buf
+	
+	return ret;
 }

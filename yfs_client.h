@@ -57,6 +57,7 @@ class yfs_client {
   int resizefile(inum, size_t);
   int writefile(inum, const char *, size_t, off_t);
   int readfile(inum, size_t, off_t, std::string &);
+  int unlink(inum, inum);
 };
 
 #endif 

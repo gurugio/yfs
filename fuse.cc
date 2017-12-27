@@ -479,7 +479,25 @@ fuseserver_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
   // You fill this in for Lab 3
   // Success:	fuse_reply_err(req, 0);
   // Not found:	fuse_reply_err(req, ENOENT);
-  fuse_reply_err(req, ENOSYS);
+	yfs_client::status ret;
+	yfs_client::inum file_inum;
+
+	printf("fuse:mkdir: parent=%016lx name=%s\n", parent, name);
+
+	ret = yfs->lookup(parent, name, file_inum);
+	if (ret != yfs_client::EXIST) {
+		fuse_reply_err(req, ENOENT);
+		return;
+	}
+
+	ret = yfs->unlink(parent, file_inum);
+	if(ret != yfs_client::OK) {
+		fuse_reply_err(req, EINVAL);
+		return;
+	}
+
+	fuse_reply_err(req, 0);
+	return;
 }
 
 void
