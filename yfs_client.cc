@@ -191,13 +191,36 @@ int yfs_client::lookup(inum parent_inum, const char *name, inum &file_inum)
 {
 	std::string dir_buf;
 	std::size_t found;
+	std::size_t len = strlen(name);
 
-	printf("lookup: parent_inum=%llu name=%s\n", parent_inum, name);
+	printf("lookup: parent_inum=%llx name=%s\n", parent_inum, name);
 
 	if (ec->get(parent_inum, dir_buf) != extent_protocol::OK)
 		return IOERR;
 
-	found = dir_buf.find(name);
+	/*
+	 * For example, the file name with "f3" can have inum 0xf3f3f3f3.
+	 * Because inum is stored as string, searching "f3" will return
+	 * the index of inum string, not name data.
+	 * For that case, it is necessary to check the found substring
+	 * is actual name. inum string always starts with "00000000",
+	 * for instance 00000000f3f3f3f3. We can be sure if [found-1] is NULL.
+	 * If [found-1] is not NULL, restart searching from [found+1].
+	 * Another solution is using strtok() and getting token of every
+	 * (inum,filename) pairs. Then we can compare only filenames.
+	 */
+	found = -1;
+	do {
+		found++;
+		found = dir_buf.find(name, found);
+		if (found == std::string::npos)
+			break;
+#if DEBUG
+		if (dir_buf[found - 1] != 0 || dir_buf[found + len] != 0)
+			printf("\n\n############# inum conflicts name\n\n\n");
+#endif
+	} while (dir_buf[found - 1] != 0 || dir_buf[found + len] != 0);
+
 	if (found == std::string::npos) {
 		DPRINTF("lookup: NOENT\n");
 		return NOENT;
@@ -363,6 +386,12 @@ int yfs_client::unlink(inum parent_inum, inum file_inum)
 	printf("\n");
 #endif
 
+	/*
+	 * BUGBUG: If a file has name of "00000000f3f3f3f3" and
+	 * inum is also 00000000f3f3f3f3, find() will return the index
+	 * of inum because inum is stored before filename.
+	 * This code will work but it's not elegance.
+	 */
 	inum_at = buf.find(inum_buf, 0, 16);
 	DPRINTF("found inum_at=%d\n", (int)inum_at);
 	if (inum_at == std::string::npos)
