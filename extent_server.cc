@@ -31,7 +31,7 @@ int extent_server::put(extent_protocol::extentid_t id, std::string buf, int &)
 	std::map<extent_protocol::extentid_t, struct yfsfile *>::iterator it;
 	struct yfsfile *f;
 
-	printf("es:put:id=%016llx name=%s\n", id, buf.c_str());
+	printf("es:put:id=%016llx\n", id);
 	pthread_mutex_lock(&attr_lock);
 
 	it = file_map->find(id);
@@ -84,7 +84,7 @@ int extent_server::getattr(extent_protocol::extentid_t id, extent_protocol::attr
 	struct yfsfile *f;
 	std::map<extent_protocol::extentid_t, struct yfsfile *>::iterator it;
 
-	printf("es:getattr: id=%llx\n", id);
+	printf("es:getattr: id=%016llx\n", id);
 	pthread_mutex_lock(&attr_lock);
 
 	it = file_map->find(id);
@@ -114,6 +114,7 @@ int extent_server::remove(extent_protocol::extentid_t id, int &)
 
 	it = file_map->find(id);
 	if (it == file_map->end()) {
+		pthread_mutex_unlock(&attr_lock);
 		return extent_protocol::IOERR;
 	}
 
