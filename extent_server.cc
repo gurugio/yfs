@@ -39,7 +39,7 @@ int extent_server::put(extent_protocol::extentid_t id, std::string buf, int &)
 		printf("es:put: set buf\n");
 		// if existing id -> set file-buffer
 		f = it->second;
-		f->file_attr.mtime = time(NULL);
+		f->file_attr.mtime = f->file_attr.ctime = time(NULL);
 		f->file_buf = buf;
 		f->file_attr.size = buf.length();
 	} else {
