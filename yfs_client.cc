@@ -343,9 +343,9 @@ int yfs_client::unlink(inum parent_inum, inum file_inum)
 {
 	std::string buf;
 	char inum_buf[17]; // 16-digit
-	//char *ptr_inum, *ptr_name;
 	size_t inum_at, name_at;
-		
+
+	// remove dirent from parent directory
 	if (ec->get(parent_inum, buf) != extent_protocol::OK)
 		return IOERR;
 
@@ -383,6 +383,10 @@ int yfs_client::unlink(inum parent_inum, inum file_inum)
 #endif
 
 	if (ec->put(parent_inum, buf) != extent_protocol::OK)
+		return IOERR;
+
+	// remove file entry
+	if (ec->remove(file_inum) != extent_protocol::OK)
 		return IOERR;
 
 	return OK;
