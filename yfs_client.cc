@@ -341,55 +341,49 @@ int yfs_client::readfile(inum file_inum, size_t size,
 
 int yfs_client::unlink(inum parent_inum, inum file_inum)
 {
-	int ret = OK;
 	std::string buf;
 	char inum_buf[17]; // 16-digit
-	char *ptr_inum, *ptr_name;
-	size_t newsize;
-	char *newptr;
+	//char *ptr_inum, *ptr_name;
+	size_t inum_at, name_at;
 		
 	if (ec->get(parent_inum, buf) != extent_protocol::OK)
 		return IOERR;
 
-	sprintf(inum_buf, "%x", file_inum);
-	inum_buf[16] = '\0';
+	sprintf(inum_buf, "%016llx", file_inum);
 	printf("yfs:unlink:file: inum=%016llx inumbuf=%s\n",
 	       file_inum, inum_buf);
 
-	for (int i=0; i < buf.length(); i++) {
-		printf("%c", buf.c_str() + i);
+#if DEBUG
+	for (unsigned int i=0; i < buf.length(); i++) {
+		if (*(buf.c_str() + i) == 0)
+			printf("#");
+		else
+			printf("%c", *(buf.c_str() + i));
 	}
 	printf("\n");
+#endif
 
-	// find inum_buf in buf
-	ptr_inum = strstr((char *)buf.c_str(), inum_buf);
-	if (ptr_inum == NULL)
+	inum_at = buf.find(inum_buf, 0, 16);
+	DPRINTF("found inum_at=%d\n", (int)inum_at);
+	if (inum_at == std::string::npos)
 		return IOERR;
 
-	ptr_name = ptr_inum + 17; // 16 + 1(NULL)
-	printf("yfs:unlink: found inum=%s name=%s\n",
-	       ptr_inum, ptr_name);
+	name_at = inum_at + 17;
+	buf.erase(name_at, strlen(buf.c_str() + name_at) + 1);
+	buf.erase(inum_at, 17);
 
-	// remove inum_buf and filename in buf
-	buf.erase(ptr_name - buf.c_str(), strlen(ptr_name) + 1);
-	ptr_inum = strstr((char *)buf.c_str(), inum_buf);
-	buf.erase(ptr_inum - buf.c_str(), 17);
-
-	
-	// newsize = buf.length() - 17 /* inum */
-	// 	- strlen(ptr_name) - 1 /* NULL for name */;
-	// newptr = new char[newsize];
-	// memcpy(newptr, buf.c_str(), ptr_inum - buf.c_str());
-	// newptr += (17 + strlen(ptr_name) + 1);
-	// memcpy(newptr,
-	//        ptr_name + strlen(ptr_name) + 1,
-	//        newsize - (ptr_inum - buf.c_str()));
-	//buf = std::string(newptr, newsize);
-	printf("yfs_unlink: newsize=%d\n", (int)buf.length());
-	for (int i=0; i < buf.length(); i++) {
-		printf("%c", buf.c_str() + i);
+#if DEBUG
+	for (unsigned int i=0; i < buf.length(); i++) {
+		if (*(buf.c_str() + i) == 0)
+			printf("#");
+		else
+			printf("%c", *(buf.c_str() + i));
 	}
 	printf("\n");
-	
-	return ret;
+#endif
+
+	if (ec->put(parent_inum, buf) != extent_protocol::OK)
+		return IOERR;
+
+	return OK;
 }
