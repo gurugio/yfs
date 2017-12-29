@@ -110,10 +110,12 @@ int extent_server::remove(extent_protocol::extentid_t id, int &)
 	struct yfsfile *f;
 	std::map<extent_protocol::extentid_t, struct yfsfile *>::iterator it;
 
+	printf("es:remove: id=%016llx\n", id);
 	pthread_mutex_lock(&attr_lock);
 
 	it = file_map->find(id);
 	if (it == file_map->end()) {
+		printf("es:remove: NOENT\n");
 		pthread_mutex_unlock(&attr_lock);
 		return extent_protocol::IOERR;
 	}
@@ -124,6 +126,16 @@ int extent_server::remove(extent_protocol::extentid_t id, int &)
 	file_map->erase(it);
 	free(f);
 
+	printf("es:remove: done\n");
+
+#if DEBUG
+	it = file_map->find(id);
+	if (it == file_map->end()) {
+		printf("es:remove: REMOVING FAILED!!!\n");
+		pthread_mutex_unlock(&attr_lock);
+		return extent_protocol::IOERR;
+	}
+#endif
 	pthread_mutex_unlock(&attr_lock);
 	return extent_protocol::OK;
 }
