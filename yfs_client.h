@@ -5,6 +5,7 @@
 //#include "yfs_protocol.h"
 #include "extent_client.h"
 #include <vector>
+#include "lock_client.h"
 
 #define DEBUG 0
 #define DPRINTF(...) do {						\
@@ -13,6 +14,7 @@
 
 class yfs_client {
   extent_client *ec;
+  lock_client *lc;
  public:
 
   typedef unsigned long long inum;
@@ -51,13 +53,14 @@ class yfs_client {
   inum get_nextid(int);
   int createfile(inum, const char *, inum *);
   int createdir(inum, const char *, inum *);
+  int __lookup(inum, const char *, inum &);
   int lookup(inum, const char *, inum &);
-  int add_dirent(inum, const char *, inum);
+  int __add_dirent(inum, const char *, inum);
   int readdir(inum, struct dirent **, int *);
   int resizefile(inum, size_t);
   int writefile(inum, const char *, size_t, off_t);
   int readfile(inum, size_t, off_t, std::string &);
-  int unlink(inum, inum);
+  int unlink(inum, const char *);
 };
 
 #endif 

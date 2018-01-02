@@ -131,21 +131,10 @@ fuseserver_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 
     // Change the above line to "#if 1", and your code goes here
     // Note: fill st using getattr before fuse_reply_attr
-    ret = getattr(ino, st);
-    if(ret != yfs_client::OK){
-		fuse_reply_err(req, ENOENT);
-		return;
-    }
-
-	if (!yfs->isfile(ino)) {
-		fuse_reply_err(req, ENOSYS);
-		return;
-	}
-
-	ret = yfs->resizefile(ino, attr->st_size);
-	if (ret != yfs_client::OK) {
-		fuse_reply_err(req, ENOENT);
-		return;
+    ret = yfs->resizefile(ino, attr->st_size);
+    if (ret != yfs_client::OK) {
+	    fuse_reply_err(req, ENOENT);
+	    return;
     }
 
     ret = getattr(ino, st);
@@ -480,17 +469,10 @@ fuseserver_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
   // Success:	fuse_reply_err(req, 0);
   // Not found:	fuse_reply_err(req, ENOENT);
 	yfs_client::status ret;
-	yfs_client::inum file_inum;
 
 	printf("fuse:mkdir: parent=%016lx name=%s\n", parent, name);
 
-	ret = yfs->lookup(parent, name, file_inum);
-	if (ret != yfs_client::EXIST) {
-		fuse_reply_err(req, ENOENT);
-		return;
-	}
-
-	ret = yfs->unlink(parent, file_inum);
+	ret = yfs->unlink(parent, name);
 	if(ret != yfs_client::OK) {
 		fuse_reply_err(req, EINVAL);
 		return;
