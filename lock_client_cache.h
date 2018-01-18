@@ -25,6 +25,9 @@ class lock_client_cache : public lock_client {
   int rlock_port;
   std::string hostname;
   std::string id;
+  int lock_owner;
+  pthread_mutex_t client_lock;
+  pthread_cond_t  client_wait;
  public:
   lock_client_cache(std::string xdst, class lock_release_user *l = 0);
   virtual ~lock_client_cache() {};

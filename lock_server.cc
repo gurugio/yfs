@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include "tprintf.h"
 
 lock_server::lock_server():
 	nacquire (0)
@@ -13,6 +14,8 @@ lock_server::lock_server():
 				  struct local_lock *>;
         pthread_mutex_init(&server_lock, NULL);
 	pthread_cond_init(&server_wait, NULL);
+
+	printf("init lock_server\n");
 }
 
 lock_server::~lock_server()
@@ -38,6 +41,7 @@ lock_server::stat(int clt, lock_protocol::lockid_t lid, int &r)
 	std::map<lock_protocol::lockid_t,
 		 struct local_lock *>::iterator it;
 
+	printf("ls: stat\n");
 	pthread_mutex_lock(&server_lock);
 	it = lock_table->find(lid);
 	if (it == lock_table->end())
@@ -58,6 +62,7 @@ lock_server::acquire(int clt, lock_protocol::lockid_t lid, int &r)
 	std::map<lock_protocol::lockid_t,
 		 struct local_lock *>::iterator it;
 
+	fprintf(stdout, "ls: acquire\n");
 	pthread_mutex_lock(&server_lock);
 	nacquire++;
 
@@ -91,6 +96,7 @@ lock_server::release(int clt, lock_protocol::lockid_t lid, int &r)
 	std::map<lock_protocol::lockid_t,
 		 struct local_lock *>::iterator it;
 
+	tprintf("ls: release\n");
 	pthread_mutex_lock(&server_lock);
 
 	it = lock_table->find(lid);

@@ -22,18 +22,46 @@ lock_client_cache::lock_client_cache(std::string xdst,
   std::ostringstream host;
   host << hname << ":" << rlsrpc->port();
   id = host.str();
+
+  // Lab4 code
+  tprintf("Create a client: id=%s\n", id.c_str());
+  pthread_mutex_init(&client_lock, NULL);
+  pthread_cond_init(&client_wait, NULL);
+  lock_owner = -1;
+  
 }
 
 lock_protocol::status
 lock_client_cache::acquire(lock_protocol::lockid_t lid)
 {
   int ret = lock_protocol::OK;
+
+  tprintf("lcc: acquire\n");
+
+  if (lock_owner < 0) {
+	  ret = lock_client::acquire(lid);
+	  if (ret == lock_protocol::OK)
+		  lock_owner = 0;
+  }
+
+  pthread_mutex_lock(&client_lock);
+
+  lock_owner = pthread_self();
+
+  pthread_mutex_unlock(&client_lock);
+
   return lock_protocol::OK;
 }
 
 lock_protocol::status
 lock_client_cache::release(lock_protocol::lockid_t lid)
 {
+	tprintf("lcc: release\n");
+
+	pthread_mutex_lock(&client_lock);
+	lock_owner = 0;
+	pthread_mutex_unlock(&client_lock);
+	
   return lock_protocol::OK;
 
 }
@@ -43,6 +71,13 @@ lock_client_cache::revoke_handler(lock_protocol::lockid_t lid,
                                   int &)
 {
   int ret = rlock_protocol::OK;
+  pthread_mutex_lock(&client_lock);
+
+  if (lock_owner > 0) {
+	  // wait for thread to release the lock
+  } else
+	  lock_owner = -1;
+  pthread_mutex_unlock(&client_lock);
   return ret;
 }
 
