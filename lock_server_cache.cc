@@ -12,35 +12,97 @@
 
 lock_server_cache::lock_server_cache()
 {
+	nacquire = 0;
+	lock_table = new std::map<lock_protocol::lockid_t,
+							  struct local_lock *>;
+	pthread_mutex_init(&server_lock, NULL);
+	pthread_cond_init(&server_wait, NULL);
 }
 
-
 int lock_server_cache::acquire(lock_protocol::lockid_t lid, std::string id, 
-                               int &)
+							   int &r)
 {
-    lock_protocol::status ret = lock_protocol::OK;
-    fprintf(stdout, "ls: %s-%llu: start acquire\n", id.c_str(), lid);
+	struct local_lock *llock;
+	std::map<lock_protocol::lockid_t,
+			 struct local_lock *>::iterator it;
 
+	tprintf("lsc: %s-%llu: start acquire\n", id.c_str(), lid);
 
-    fprintf(stdout, "ls: %s-%llu: finish acquire\n", id.c_str(), lid);
-    return ret;
+	pthread_mutex_lock(&server_lock);
+	nacquire++;
+
+	it = lock_table->find(lid);
+
+	if (it == lock_table->end()) {
+		llock = new local_lock();
+		llock->status = lock_protocol::FREE;
+		lock_table->insert(std::make_pair(lid, llock));
+	}
+
+	it = lock_table->find(lid);
+	llock = it->second;
+
+	if (llock->status == lock_protocol::LOCKED) {
+		// TODO:
+		// 1. add id into waiting-list
+
+		r = lock_protocol::RETRY;
+	} else {
+		r = llock->status = lock_protocol::LOCKED;
+		llock->owner = id;
+	}
+
+	pthread_mutex_unlock(&server_lock);
+	tprintf("lsc: %s-%llu: finish acquire\n", id.c_str(), lid);
+	return lock_protocol::OK;
 }
 
 int 
 lock_server_cache::release(lock_protocol::lockid_t lid, std::string id, 
-         int &r)
+		 int &r)
 {
-    lock_protocol::status ret = lock_protocol::OK;
-    tprintf("ls: %s-%llu: start release\n", id.c_str(), lid);
-    tprintf("ls: %s-%llu: finish release\n", id.c_str(), lid);
-    return ret;
+	struct local_lock *llock;
+	std::map<lock_protocol::lockid_t,
+			 struct local_lock *>::iterator it;
+
+	tprintf("ls: %s-%llu: start release\n", id.c_str(), lid);
+
+	pthread_mutex_lock(&server_lock);
+
+	it = lock_table->find(lid);
+	llock = it->second;
+
+	r = llock->status = lock_protocol::FREE;
+	llock->owner = "";
+	nacquire--;
+	
+	// TODO:
+	// send retry RPC to next lock owner
+
+	pthread_mutex_unlock(&server_lock);
+	tprintf("ls: %s-%llu: finish release\n", id.c_str(), lid);
+	return lock_protocol::OK;
 }
 
 lock_protocol::status
 lock_server_cache::stat(lock_protocol::lockid_t lid, int &r)
 {
-    tprintf("stat request: %llu\n", lid);
-  r = nacquire;
-  return lock_protocol::OK;
+	struct local_lock *llock;
+	std::map<lock_protocol::lockid_t,
+			 struct local_lock *>::iterator it;
+
+	tprintf("lsc: stat request: lid=%llu\n", lid);
+	pthread_mutex_lock(&server_lock);
+
+	it = lock_table->find(lid);
+	if (it == lock_table->end())
+		r = lock_protocol::NOENT;
+	else {
+		llock = it->second;
+		r = llock->status;
+	}
+
+	pthread_mutex_unlock(&server_lock);
+	return lock_protocol::OK;
 }
 
