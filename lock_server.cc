@@ -62,7 +62,7 @@ lock_server::acquire(int clt, lock_protocol::lockid_t lid, int &r)
 	std::map<lock_protocol::lockid_t,
 		 struct local_lock *>::iterator it;
 
-	fprintf(stdout, "ls: acquire\n");
+	fprintf(stdout, "ls: %d-%llu: start acquire\n", clt, lid);
 	pthread_mutex_lock(&server_lock);
 	nacquire++;
 
@@ -85,6 +85,8 @@ lock_server::acquire(int clt, lock_protocol::lockid_t lid, int &r)
 	r = llock->status = lock_protocol::LOCKED;
 	llock->owner = clt;
 	pthread_mutex_unlock(&server_lock);
+
+	fprintf(stdout, "ls: %d-%llu: finish acquire\n", clt, lid);
 	return ret;
 }
 
@@ -96,7 +98,7 @@ lock_server::release(int clt, lock_protocol::lockid_t lid, int &r)
 	std::map<lock_protocol::lockid_t,
 		 struct local_lock *>::iterator it;
 
-	tprintf("ls: release\n");
+	tprintf("ls: %d-%llu: start release\n", clt, lid);
 	pthread_mutex_lock(&server_lock);
 
 	it = lock_table->find(lid);
@@ -121,5 +123,7 @@ lock_server::release(int clt, lock_protocol::lockid_t lid, int &r)
 
 unlock:
 	pthread_mutex_unlock(&server_lock);
+
+	tprintf("ls: %d-%llu: finish release\n", clt, lid);
 	return ret;
 }

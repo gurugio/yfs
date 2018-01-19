@@ -25,9 +25,14 @@ class lock_client_cache : public lock_client {
   int rlock_port;
   std::string hostname;
   std::string id;
-  int lock_owner;
+  pthread_t lock_owner;
   pthread_mutex_t client_lock;
   pthread_cond_t  client_wait;
+  pthread_mutex_t retry_lock;
+  pthread_cond_t  retry_wait;
+  enum lock_status_values { LOCK_NONE, LOCK_FREE, LOCK_LOCKED, LOCK_ACQUIRING, LOCK_RELEASING };
+  int lock_status;
+
  public:
   lock_client_cache(std::string xdst, class lock_release_user *l = 0);
   virtual ~lock_client_cache() {};
