@@ -14,8 +14,10 @@ lock_client_cache::lock_client_cache(std::string xdst,
 	: lock_client(xdst), lu(_lu)
 {
 	rpcs *rlsrpc = new rpcs(0);
-	rlsrpc->reg(rlock_protocol::revoke, this, &lock_client_cache::revoke_handler);
-	rlsrpc->reg(rlock_protocol::retry, this, &lock_client_cache::retry_handler);
+	rlsrpc->reg(rlock_protocol::revoke, this,
+				&lock_client_cache::revoke_handler);
+	rlsrpc->reg(rlock_protocol::retry, this,
+				&lock_client_cache::retry_handler);
 
 	const char *hname;
 	hname = "127.0.0.1";
@@ -104,38 +106,20 @@ rlock_protocol::status
 lock_client_cache::revoke_handler(lock_protocol::lockid_t lid, 
 								  int &)
 {
-	int ret = rlock_protocol::OK;
-	int r;
-  
 	tprintf("lcc: %s-%llu: start revoke\n", id.c_str(), lid);
 
 	pthread_mutex_lock(&client_lock);
 
-	if (lock_status == LOCK_LOCKED
-		|| lock_status == LOCK_ACQUIRING
-		|| lock_status == LOCK_RELEASING) {
-		// wait for thread to release the lock
-
-	}
-
-	if (lock_status == LOCK_FREE) {
-		lock_status = LOCK_RELEASING;
-		pthread_mutex_unlock(&client_lock);
-	  
-		ret = cl->call(lock_protocol::release_cache, lid, id, r);
-		VERIFY(ret == lock_protocol::OK);
-		
-		tprintf("lcc: %s-%llu: call RPC-release\n", id.c_str(), lid);
-	} else {
-		// LOCK_NONE
-		// ERROR: not my lock
+	// TODO: set flag
+	if (lock_status != LOCK_NONE) {
+		tprintf("lcc: %s-%llu: yes, it's my lock\n", id.c_str(), lid);
 	}
 
 	pthread_mutex_unlock(&client_lock);
 
 	tprintf("lcc: %s-%llu: finish revoke\n", id.c_str(), lid);
 
-	return ret;
+	return rlock_protocol::OK;
 }
 
 rlock_protocol::status

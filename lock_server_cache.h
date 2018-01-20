@@ -25,6 +25,7 @@ public:
 	lock_protocol::status stat(lock_protocol::lockid_t, int &);
 	int acquire(lock_protocol::lockid_t, std::string id, int &);
 	int release(lock_protocol::lockid_t, std::string id, int &);
+	int call_revoke(lock_protocol::lockid_t, std::string);
 };
 
 #endif

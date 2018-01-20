@@ -19,6 +19,26 @@ lock_server_cache::lock_server_cache()
 	pthread_cond_init(&server_wait, NULL);
 }
 
+int lock_server_cache::call_revoke(lock_protocol::lockid_t lid, std::string id)
+{
+	int ret, r;
+	rpcc *cl;
+	sockaddr_in dstsock;
+
+	make_sockaddr(id.c_str(), &dstsock);
+	cl = new rpcc(dstsock);
+	if (cl->bind() < 0) {
+		printf("lock_server_cache: call bind\n");
+	}
+
+	ret = cl->call(rlock_protocol::revoke, lid, r);
+	if (ret != rlock_protocol::OK)
+		tprintf("lsc: revoke RPC error\n");
+
+	delete cl;
+	return ret;
+}
+
 int lock_server_cache::acquire(lock_protocol::lockid_t lid, std::string id, 
 							   int &r)
 {
@@ -43,10 +63,9 @@ int lock_server_cache::acquire(lock_protocol::lockid_t lid, std::string id,
 	llock = it->second;
 
 	if (llock->status == lock_protocol::LOCKED) {
-		// TODO:
-		// 1. add id into waiting-list
-
+		llock->wait_list.insert(id);
 		r = lock_protocol::RETRY;
+		call_revoke(lid, llock->owner);
 	} else {
 		r = llock->status = lock_protocol::LOCKED;
 		llock->owner = id;
