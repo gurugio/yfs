@@ -33,6 +33,7 @@ lock_client_cache::lock_client_cache(std::string xdst,
 	pthread_cond_init(&retry_wait, NULL);
 	lock_owner = 0;
 	lock_status = LOCK_NONE;
+	to_release = false;
 }
 
 lock_protocol::status
@@ -89,12 +90,22 @@ lock_client_cache::acquire(lock_protocol::lockid_t lid)
 lock_protocol::status
 lock_client_cache::release(lock_protocol::lockid_t lid)
 {
+	int ret, r;
+
 	tprintf("lcc: %s-%llu: start release\n", id.c_str(), lid);
 
 	pthread_mutex_lock(&client_lock);
 	lock_owner = 0;
-	lock_status = LOCK_FREE;
-	pthread_cond_signal(&client_wait);
+
+	if (to_release) {
+		ret = cl->call(lock_protocol::release_cache, lid, id, r);
+		VERIFY(ret == lock_protocol::OK);
+		lock_status = LOCK_NONE;
+	} else {
+		pthread_cond_signal(&client_wait);
+		lock_status = LOCK_FREE;
+	}
+
 	pthread_mutex_unlock(&client_lock);
 
 	tprintf("lcc: %s-%llu: finish release\n", id.c_str(), lid);
@@ -113,6 +124,8 @@ lock_client_cache::revoke_handler(lock_protocol::lockid_t lid,
 	// TODO: set flag
 	if (lock_status != LOCK_NONE) {
 		tprintf("lcc: %s-%llu: yes, it's my lock\n", id.c_str(), lid);
+	} else {
+		to_release = true;
 	}
 
 	pthread_mutex_unlock(&client_lock);

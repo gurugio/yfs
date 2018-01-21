@@ -30,8 +30,10 @@ class lock_client_cache : public lock_client {
   pthread_cond_t  client_wait;
   pthread_mutex_t retry_lock;
   pthread_cond_t  retry_wait;
-  enum lock_status_values { LOCK_NONE, LOCK_FREE, LOCK_LOCKED, LOCK_ACQUIRING, LOCK_RELEASING };
+  enum lock_status_values { LOCK_NONE, LOCK_FREE,
+							LOCK_LOCKED, LOCK_ACQUIRING, LOCK_RELEASING };
   int lock_status;
+  bool to_release;
 
  public:
   lock_client_cache(std::string xdst, class lock_release_user *l = 0);

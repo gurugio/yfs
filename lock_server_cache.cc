@@ -96,7 +96,8 @@ lock_server_cache::release(lock_protocol::lockid_t lid, std::string id,
 	nacquire--;
 	
 	// TODO:
-	// send retry RPC to next lock owner
+	// 1. extract next owner from waiting_list
+	// 2. send retry RPC to next lock owner
 
 	pthread_mutex_unlock(&server_lock);
 	tprintf("ls: %s-%llu: finish release\n", id.c_str(), lid);
