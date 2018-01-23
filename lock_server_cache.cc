@@ -63,7 +63,7 @@ int lock_server_cache::acquire(lock_protocol::lockid_t lid, std::string id,
 	llock = it->second;
 
 	if (llock->status == lock_protocol::LOCKED) {
-		llock->wait_list.insert(id);
+		llock->wait_list.push_back(id);
 		r = lock_protocol::RETRY;
 		call_revoke(lid, llock->owner);
 	} else {
@@ -76,6 +76,26 @@ int lock_server_cache::acquire(lock_protocol::lockid_t lid, std::string id,
 	return lock_protocol::OK;
 }
 
+int lock_server_cache::call_retry(lock_protocol::lockid_t lid, std::string id)
+{
+	int ret, r;
+	rpcc *cl;
+	sockaddr_in dstsock;
+
+	make_sockaddr(id.c_str(), &dstsock);
+	cl = new rpcc(dstsock);
+	if (cl->bind() < 0) {
+		printf("lock_server_cache: call bind\n");
+	}
+
+	ret = cl->call(rlock_protocol::retry, lid, r);
+	if (ret != rlock_protocol::OK)
+		tprintf("lsc: revoke RPC error\n");
+
+	delete cl;
+	return ret;
+}
+
 int 
 lock_server_cache::release(lock_protocol::lockid_t lid, std::string id, 
 		 int &r)
@@ -83,6 +103,7 @@ lock_server_cache::release(lock_protocol::lockid_t lid, std::string id,
 	struct local_lock *llock;
 	std::map<lock_protocol::lockid_t,
 			 struct local_lock *>::iterator it;
+	std::string next_owner;
 
 	tprintf("ls: %s-%llu: start release\n", id.c_str(), lid);
 
@@ -95,9 +116,9 @@ lock_server_cache::release(lock_protocol::lockid_t lid, std::string id,
 	llock->owner = "";
 	nacquire--;
 	
-	// TODO:
-	// 1. extract next owner from waiting_list
-	// 2. send retry RPC to next lock owner
+	next_owner = llock->wait_list.front();
+	llock->wait_list.pop_front();
+	call_retry(lid, next_owner);
 
 	pthread_mutex_unlock(&server_lock);
 	tprintf("ls: %s-%llu: finish release\n", id.c_str(), lid);

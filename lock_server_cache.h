@@ -13,7 +13,11 @@ private:
 	struct local_lock {
 		int status;
 		std::string owner;
-		std::set<std::string> wait_list;
+		// why list?
+		// One client can have multiple threads
+		// and each thread can send acquire.
+		// List can keep the order of requests and save multiple requests.
+		std::list<std::string> wait_list;
 	};
 
 	int nacquire;
@@ -26,6 +30,7 @@ public:
 	int acquire(lock_protocol::lockid_t, std::string id, int &);
 	int release(lock_protocol::lockid_t, std::string id, int &);
 	int call_revoke(lock_protocol::lockid_t, std::string);
+	int call_retry(lock_protocol::lockid_t, std::string);
 };
 
 #endif

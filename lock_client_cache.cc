@@ -49,6 +49,7 @@ lock_client_cache::acquire(lock_protocol::lockid_t lid)
 	while (lock_status == LOCK_LOCKED
 		   || lock_status == LOCK_ACQUIRING
 		   || lock_status == LOCK_RELEASING) {
+		tprintf("lcc: %s-%llu: wait\n", id.c_str(), lid);
 		pthread_cond_wait(&client_wait, &client_lock);
 	}
   
@@ -79,6 +80,10 @@ lock_client_cache::acquire(lock_protocol::lockid_t lid)
 	} else if (lock_status == LOCK_FREE) {
 		lock_owner = pthread_self();
 		lock_status = LOCK_LOCKED;
+	} else {
+		tprintf("lcc: %s-%llu: ERROR lock_status:%d\n",
+				id.c_str(), lid, lock_status);
+		exit(1);
 	}
 
 	tprintf("lcc: %s-%llu: finish acquire\n", id.c_str(), lid);
@@ -98,9 +103,14 @@ lock_client_cache::release(lock_protocol::lockid_t lid)
 	lock_owner = 0;
 
 	if (to_release) {
+		lock_status = LOCK_RELEASING;
+		pthread_mutex_unlock(&client_lock);
 		ret = cl->call(lock_protocol::release_cache, lid, id, r);
 		VERIFY(ret == lock_protocol::OK);
+		pthread_mutex_lock(&client_lock);
+
 		lock_status = LOCK_NONE;
+		to_release = false;
 	} else {
 		pthread_cond_signal(&client_wait);
 		lock_status = LOCK_FREE;
