@@ -10,7 +10,7 @@
 
 
 lock_client_cache::lock_client_cache(std::string xdst, 
-									 class lock_release_user *_lu)
+				     class lock_release_user *_lu)
 	: lock_client(xdst), lu(_lu)
 {
 	rpcs *rlsrpc = new rpcs(0);
@@ -29,11 +29,10 @@ lock_client_cache::lock_client_cache(std::string xdst,
 	tprintf("Create a client: id=%s\n", id.c_str());
 	pthread_mutex_init(&client_lock, NULL);
 	pthread_cond_init(&client_wait, NULL);
-	pthread_mutex_init(&retry_lock, NULL);
-	pthread_cond_init(&retry_wait, NULL);
-	lock_owner = 0;
-	lock_status = LOCK_NONE;
 	to_release = false;
+	// client also manages multiple locks
+	lock_table = new std::map<lock_protocol::lockid_t,
+				  struct local_lock *>;
 }
 
 lock_protocol::status
@@ -41,20 +40,39 @@ lock_client_cache::acquire(lock_protocol::lockid_t lid)
 {
 	int ret = lock_protocol::OK;
 	int r;
+	struct local_lock *llock;
+	std::map<lock_protocol::lockid_t,
+			 struct local_lock *>::iterator it;
 
 	tprintf("lcc: %s-%llu: start acquire\n", id.c_str(), lid);
 
 	pthread_mutex_lock(&client_lock);
 
-	while (lock_status == LOCK_LOCKED
-		   || lock_status == LOCK_ACQUIRING
-		   || lock_status == LOCK_RELEASING) {
+	it = lock_table->find(lid);
+
+	if (it == lock_table->end()) {
+		llock = new local_lock();
+		llock->status = LOCK_NONE;
+		pthread_mutex_init(&llock->retry_lock, NULL);
+		pthread_cond_init(&llock->retry_wait, NULL);
+		lock_table->insert(std::make_pair(lid, llock));
+	}
+
+	it = lock_table->find(lid);
+	llock = it->second;
+
+	while (llock->status == LOCK_LOCKED
+		   || llock->status == LOCK_ACQUIRING
+		   || llock->status == LOCK_RELEASING) {
 		tprintf("lcc: %s-%llu: wait\n", id.c_str(), lid);
 		pthread_cond_wait(&client_wait, &client_lock);
+		// wake up and re-check
+		it = lock_table->find(lid);
+		llock = it->second;
 	}
   
-	if (lock_status == LOCK_NONE) {
-		lock_status = LOCK_ACQUIRING;
+	if (llock->status == LOCK_NONE) {
+		llock->status = LOCK_ACQUIRING;
 		tprintf("lcc: %s-%llu: call RPC-acquire\n", id.c_str(), lid);
 		// MUST unlock before RPC call
 		pthread_mutex_unlock(&client_lock);
@@ -63,26 +81,26 @@ lock_client_cache::acquire(lock_protocol::lockid_t lid)
 		VERIFY (ret == lock_protocol::OK);
 		
 		if (r == lock_protocol::LOCKED) {
-			lock_owner = pthread_self();
+			llock->owner = pthread_self();
 			tprintf("lcc: %s-%llu: RPC-OK\n", id.c_str(), lid);
 		} else if (r == lock_protocol::RETRY) {
 			tprintf("lcc: %s-%llu: RPC-RETRY\n", id.c_str(), lid);
 			// wait server sends retry rpc and retry_handler is called
-			pthread_mutex_lock(&retry_lock);
-			pthread_cond_wait(&retry_wait, &retry_lock);
-			pthread_mutex_unlock(&retry_lock);
+			pthread_mutex_lock(&llock->retry_lock);
+			pthread_cond_wait(&llock->retry_wait, &llock->retry_lock);
+			pthread_mutex_unlock(&llock->retry_lock);
 		} else {
 			return lock_protocol::RPCERR;
 		}
 
 		pthread_mutex_lock(&client_lock);
-		lock_status = LOCK_LOCKED;
-	} else if (lock_status == LOCK_FREE) {
-		lock_owner = pthread_self();
-		lock_status = LOCK_LOCKED;
+		llock->status = LOCK_LOCKED;
+	} else if (llock->status == LOCK_FREE) {
+		llock->owner = pthread_self();
+		llock->status = LOCK_LOCKED;
 	} else {
-		tprintf("lcc: %s-%llu: ERROR lock_status:%d\n",
-				id.c_str(), lid, lock_status);
+		tprintf("lcc: %s-%llu: ERROR llock->status:%d\n",
+				id.c_str(), lid, llock->status);
 		exit(1);
 	}
 
@@ -96,25 +114,32 @@ lock_protocol::status
 lock_client_cache::release(lock_protocol::lockid_t lid)
 {
 	int ret, r;
+	struct local_lock *llock;
+	std::map<lock_protocol::lockid_t,
+			 struct local_lock *>::iterator it;
 
 	tprintf("lcc: %s-%llu: start release\n", id.c_str(), lid);
 
 	pthread_mutex_lock(&client_lock);
-	lock_owner = 0;
+
+	it = lock_table->find(lid);
+	llock = it->second;
 
 	if (to_release) {
-		lock_status = LOCK_RELEASING;
+		llock->status = LOCK_RELEASING;
 		pthread_mutex_unlock(&client_lock);
 		ret = cl->call(lock_protocol::release_cache, lid, id, r);
 		VERIFY(ret == lock_protocol::OK);
 		pthread_mutex_lock(&client_lock);
 
-		lock_status = LOCK_NONE;
+		llock->status = LOCK_NONE;
 		to_release = false;
 	} else {
 		pthread_cond_signal(&client_wait);
-		lock_status = LOCK_FREE;
+		llock->status = LOCK_FREE;
 	}
+
+	llock->owner = "";
 
 	pthread_mutex_unlock(&client_lock);
 
@@ -127,13 +152,18 @@ rlock_protocol::status
 lock_client_cache::revoke_handler(lock_protocol::lockid_t lid, 
 								  int &)
 {
+	struct local_lock *llock;
+	std::map<lock_protocol::lockid_t,
+			 struct local_lock *>::iterator it;
+
 	tprintf("lcc: %s-%llu: start revoke\n", id.c_str(), lid);
 
 	pthread_mutex_lock(&client_lock);
 
-	// TODO: set flag
-	if (lock_status != LOCK_NONE) {
-		tprintf("lcc: %s-%llu: yes, it's my lock\n", id.c_str(), lid);
+	it = lock_table->find(lid);
+	llock = it->second;
+	if (llock->status == LOCK_NONE) {
+		tprintf("lcc: %s-%llu: ERROR, not my lock\n", id.c_str(), lid);
 	} else {
 		to_release = true;
 	}
@@ -149,13 +179,19 @@ rlock_protocol::status
 lock_client_cache::retry_handler(lock_protocol::lockid_t lid, 
 								 int &)
 {
+	struct local_lock *llock;
+	std::map<lock_protocol::lockid_t,
+			 struct local_lock *>::iterator it;
 	int ret = rlock_protocol::OK;
 
 	tprintf("lcc: %s-%llu: start retry\n", id.c_str(), lid);
 
-	pthread_mutex_lock(&retry_lock);
-	pthread_cond_signal(&retry_wait);
-	pthread_mutex_unlock(&retry_lock);
+	it = lock_table->find(lid);
+	llock = it->second;
+
+	pthread_mutex_lock(&llock->retry_lock);
+	pthread_cond_signal(&llock->retry_wait);
+	pthread_mutex_unlock(&llock->retry_lock);
 
 	tprintf("lcc: %s-%llu: finish retry\n", id.c_str(), lid);
 
