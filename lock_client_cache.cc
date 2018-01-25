@@ -77,6 +77,7 @@ lock_client_cache::acquire(lock_protocol::lockid_t lid)
 		// MUST unlock before RPC call
 		pthread_mutex_unlock(&client_lock);
 
+	  retry_acquire:
 		ret = cl->call(lock_protocol::acquire_cache, lid, id, r);
 		VERIFY (ret == lock_protocol::OK);
 		
@@ -89,7 +90,9 @@ lock_client_cache::acquire(lock_protocol::lockid_t lid)
 			pthread_mutex_lock(&llock->retry_lock);
 			pthread_cond_wait(&llock->retry_wait, &llock->retry_lock);
 			pthread_mutex_unlock(&llock->retry_lock);
+			goto retry_acquire;
 		} else {
+			tprintf("lcc: %s-%llu: ERROR rpc failed\n", id.c_str(), lid);
 			return lock_protocol::RPCERR;
 		}
 
@@ -128,10 +131,11 @@ lock_client_cache::release(lock_protocol::lockid_t lid)
 	if (to_release) {
 		llock->status = LOCK_RELEASING;
 		pthread_mutex_unlock(&client_lock);
+
 		ret = cl->call(lock_protocol::release_cache, lid, id, r);
 		VERIFY(ret == lock_protocol::OK);
-		pthread_mutex_lock(&client_lock);
 
+		pthread_mutex_lock(&client_lock);
 		llock->status = LOCK_NONE;
 		to_release = false;
 	} else {

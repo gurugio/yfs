@@ -71,8 +71,8 @@ int lock_server_cache::acquire(lock_protocol::lockid_t lid, std::string id,
 		llock->owner = id;
 	}
 
-	pthread_mutex_unlock(&server_lock);
 	tprintf("lsc: %s-%llu: finish acquire\n", id.c_str(), lid);
+	pthread_mutex_unlock(&server_lock);
 	return lock_protocol::OK;
 }
 
@@ -115,13 +115,18 @@ lock_server_cache::release(lock_protocol::lockid_t lid, std::string id,
 	r = llock->status = lock_protocol::FREE;
 	llock->owner = "";
 	nacquire--;
-	
-	next_owner = llock->wait_list.front();
-	llock->wait_list.pop_front();
-	call_retry(lid, next_owner);
 
-	pthread_mutex_unlock(&server_lock);
+	// TODO: send retry to all waiting-threads
+	// then waiting-threads send revoke again to new owner??
+	if (!llock->wait_list.empty()) {
+	    next_owner = llock->wait_list.front();
+	    llock->wait_list.pop_front();
+	    call_retry(lid, next_owner);
+	    tprintf("ls: %s-%llu: send-retry to %s\n", id.c_str(), lid, next_owner.c_str());
+	}
+
 	tprintf("ls: %s-%llu: finish release\n", id.c_str(), lid);
+	pthread_mutex_unlock(&server_lock);
 	return lock_protocol::OK;
 }
 
