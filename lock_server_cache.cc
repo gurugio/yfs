@@ -46,9 +46,9 @@ int lock_server_cache::acquire(lock_protocol::lockid_t lid, std::string id,
 	std::map<lock_protocol::lockid_t,
 			 struct local_lock *>::iterator it;
 
+	pthread_mutex_lock(&server_lock);
 	tprintf("lsc: %s-%llu: start acquire\n", id.c_str(), lid);
 
-	pthread_mutex_lock(&server_lock);
 	nacquire++;
 
 	it = lock_table->find(lid);
@@ -105,9 +105,8 @@ lock_server_cache::release(lock_protocol::lockid_t lid, std::string id,
 			 struct local_lock *>::iterator it;
 	std::string next_owner;
 
-	tprintf("lsc: %s-%llu: start release\n", id.c_str(), lid);
-
 	pthread_mutex_lock(&server_lock);
+	tprintf("lsc: %s-%llu: start release\n", id.c_str(), lid);
 
 	it = lock_table->find(lid);
 	llock = it->second;
@@ -137,8 +136,8 @@ lock_server_cache::stat(lock_protocol::lockid_t lid, int &r)
 	std::map<lock_protocol::lockid_t,
 			 struct local_lock *>::iterator it;
 
-	tprintf("lsc: stat request: lid=%llu\n", lid);
 	pthread_mutex_lock(&server_lock);
+	tprintf("lsc: stat request: lid=%llu\n", lid);
 
 	it = lock_table->find(lid);
 	if (it == lock_table->end())

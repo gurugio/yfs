@@ -44,9 +44,8 @@ lock_client_cache::acquire(lock_protocol::lockid_t lid)
 	std::map<lock_protocol::lockid_t,
 			 struct local_lock *>::iterator it;
 
-	tprintf("lcc: %s-%llu: start acquire\n", id.c_str(), lid);
-
 	pthread_mutex_lock(&client_lock);
+	tprintf("lcc: %s-%llu: start acquire\n", id.c_str(), lid);
 
 	it = lock_table->find(lid);
 
@@ -121,9 +120,8 @@ lock_client_cache::release(lock_protocol::lockid_t lid)
 	std::map<lock_protocol::lockid_t,
 			 struct local_lock *>::iterator it;
 
-	tprintf("lcc: %s-%llu: start release\n", id.c_str(), lid);
-
 	pthread_mutex_lock(&client_lock);
+	tprintf("lcc: %s-%llu: start release\n", id.c_str(), lid);
 
 	it = lock_table->find(lid);
 	llock = it->second;
@@ -145,9 +143,8 @@ lock_client_cache::release(lock_protocol::lockid_t lid)
 
 	llock->owner = "";
 
-	pthread_mutex_unlock(&client_lock);
-
 	tprintf("lcc: %s-%llu: finish release\n", id.c_str(), lid);
+	pthread_mutex_unlock(&client_lock);
 	
 	return lock_protocol::OK;
 }
@@ -160,9 +157,8 @@ lock_client_cache::revoke_handler(lock_protocol::lockid_t lid,
 	std::map<lock_protocol::lockid_t,
 			 struct local_lock *>::iterator it;
 
-	tprintf("lcc: %s-%llu: start revoke\n", id.c_str(), lid);
-
 	pthread_mutex_lock(&client_lock);
+	tprintf("lcc: %s-%llu: start revoke\n", id.c_str(), lid);
 
 	it = lock_table->find(lid);
 	llock = it->second;
@@ -172,9 +168,8 @@ lock_client_cache::revoke_handler(lock_protocol::lockid_t lid,
 		to_release = true;
 	}
 
-	pthread_mutex_unlock(&client_lock);
-
 	tprintf("lcc: %s-%llu: finish revoke\n", id.c_str(), lid);
+	pthread_mutex_unlock(&client_lock);
 
 	return rlock_protocol::OK;
 }
