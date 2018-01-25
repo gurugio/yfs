@@ -82,9 +82,9 @@ lock_client_cache::acquire(lock_protocol::lockid_t lid)
 		
 		if (r == lock_protocol::LOCKED) {
 			llock->owner = pthread_self();
-			tprintf("lcc: %s-%llu: RPC-OK\n", id.c_str(), lid);
+			tprintf("lcc: %s-%llu: acquire-OK\n", id.c_str(), lid);
 		} else if (r == lock_protocol::RETRY) {
-			tprintf("lcc: %s-%llu: RPC-RETRY\n", id.c_str(), lid);
+			tprintf("lcc: %s-%llu: acquire-RETRY\n", id.c_str(), lid);
 			// wait server sends retry rpc and retry_handler is called
 			pthread_mutex_lock(&llock->retry_lock);
 			pthread_cond_wait(&llock->retry_wait, &llock->retry_lock);
@@ -136,9 +136,11 @@ lock_client_cache::release(lock_protocol::lockid_t lid)
 		pthread_mutex_lock(&client_lock);
 		llock->status = LOCK_NONE;
 		to_release = false;
+		tprintf("lcc: %s-%llu: release to server\n", id.c_str(), lid);
 	} else {
 		pthread_cond_signal(&client_wait);
 		llock->status = LOCK_FREE;
+		tprintf("lcc: %s-%llu: keep lock\n", id.c_str(), lid);
 	}
 
 	llock->owner = "";
@@ -156,6 +158,8 @@ lock_client_cache::revoke_handler(lock_protocol::lockid_t lid,
 	struct local_lock *llock;
 	std::map<lock_protocol::lockid_t,
 			 struct local_lock *>::iterator it;
+	int ret;
+	int r;
 
 	pthread_mutex_lock(&client_lock);
 	tprintf("lcc: %s-%llu: start revoke\n", id.c_str(), lid);
@@ -164,6 +168,17 @@ lock_client_cache::revoke_handler(lock_protocol::lockid_t lid,
 	llock = it->second;
 	if (llock->status == LOCK_NONE) {
 		tprintf("lcc: %s-%llu: ERROR, not my lock\n", id.c_str(), lid);
+	} else if (llock->status == LOCK_FREE) {
+		// no thread is holding lock, so it can be released
+		llock->status = LOCK_RELEASING;
+		pthread_mutex_unlock(&client_lock);
+
+		ret = cl->call(lock_protocol::release_cache, lid, id, r);
+		VERIFY(ret == lock_protocol::OK);
+
+		pthread_mutex_lock(&client_lock);
+		llock->status = LOCK_NONE;
+		to_release = false;
 	} else {
 		to_release = true;
 	}
