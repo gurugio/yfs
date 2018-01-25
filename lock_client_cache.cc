@@ -171,6 +171,7 @@ lock_client_cache::revoke_handler(lock_protocol::lockid_t lid,
 	} else if (llock->status == LOCK_FREE) {
 		// no thread is holding lock, so it can be released
 		llock->status = LOCK_RELEASING;
+		tprintf("lcc: %s-%llu: release to server\n", id.c_str(), lid);
 		pthread_mutex_unlock(&client_lock);
 
 		ret = cl->call(lock_protocol::release_cache, lid, id, r);
@@ -180,6 +181,7 @@ lock_client_cache::revoke_handler(lock_protocol::lockid_t lid,
 		llock->status = LOCK_NONE;
 		to_release = false;
 	} else {
+		tprintf("lcc: %s-%llu: release later\n", id.c_str(), lid);
 		to_release = true;
 	}
 

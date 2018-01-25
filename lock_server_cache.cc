@@ -65,7 +65,11 @@ int lock_server_cache::acquire(lock_protocol::lockid_t lid, std::string id,
 	if (llock->status == lock_protocol::LOCKED) {
 		llock->wait_list.push_back(id);
 		r = lock_protocol::RETRY;
+		pthread_mutex_unlock(&server_lock);
+
 		call_revoke(lid, llock->owner);
+
+		pthread_mutex_lock(&server_lock);
 	} else {
 		r = llock->status = lock_protocol::LOCKED;
 		llock->owner = id;
@@ -120,7 +124,11 @@ lock_server_cache::release(lock_protocol::lockid_t lid, std::string id,
 	while (!llock->wait_list.empty()) {
 	    next_owner = llock->wait_list.front();
 	    llock->wait_list.pop_front();
+		pthread_mutex_unlock(&server_lock);
+
 	    call_retry(lid, next_owner);
+
+		pthread_mutex_lock(&server_lock);
 	    tprintf("lsc: %s-%llu: send-retry to %s\n", id.c_str(), lid, next_owner.c_str());
 	}
 
