@@ -65,21 +65,25 @@ lock_client_cache::acquire(lock_protocol::lockid_t lid)
 		   || llock->status == LOCK_RELEASING) {
 		tprintf("lcc: %s-%llu: wait\n", id.c_str(), lid);
 		pthread_cond_wait(&client_wait, &client_lock);
-		// wake up and re-check
+		// wake up and re-check: LOCK_NONE or LOCK_FREE
 		it = lock_table->find(lid);
 		llock = it->second;
 	}
   
 	if (llock->status == LOCK_NONE) {
+		// change status, other threads will wait cond
 		llock->status = LOCK_ACQUIRING;
+
+	retry_acquire:
 		tprintf("lcc: %s-%llu: call RPC-acquire\n", id.c_str(), lid);
 		// MUST unlock before RPC call
 		pthread_mutex_unlock(&client_lock);
 
-	  retry_acquire:
 		ret = cl->call(lock_protocol::acquire_cache, lid, id, r);
 		VERIFY (ret == lock_protocol::OK);
 		
+		pthread_mutex_lock(&client_lock);
+
 		if (r == lock_protocol::LOCKED) {
 			llock->owner = pthread_self();
 			tprintf("lcc: %s-%llu: acquire-OK\n", id.c_str(), lid);
@@ -95,9 +99,9 @@ lock_client_cache::acquire(lock_protocol::lockid_t lid)
 			return lock_protocol::RPCERR;
 		}
 
-		pthread_mutex_lock(&client_lock);
 		llock->status = LOCK_LOCKED;
 	} else if (llock->status == LOCK_FREE) {
+		tprintf("lcc: %s-%llu: get local-lock\n", id.c_str(), lid);
 		llock->owner = pthread_self();
 		llock->status = LOCK_LOCKED;
 	} else {
