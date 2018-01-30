@@ -29,8 +29,9 @@ class lock_client_cache : public lock_client {
 		// and each thread can send acquire.
 		// List can keep the order of requests and save multiple requests.
 		std::list<std::string> wait_list;
-		pthread_mutex_t retry_lock;
+		/* pthread_mutex_t retry_lock; */
 		pthread_cond_t  retry_wait;
+		bool waiting_retry;
 	};
 	std::map<lock_protocol::lockid_t, struct local_lock *> *lock_table;
 
