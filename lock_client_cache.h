@@ -45,6 +45,7 @@ class lock_client_cache : public lock_client {
 	enum lock_status_values { LOCK_NONE, LOCK_FREE,
 				  LOCK_LOCKED, LOCK_ACQUIRING, LOCK_RELEASING };
 	bool to_release;
+	int nacquire;
 
  public:
   lock_client_cache(std::string xdst, class lock_release_user *l = 0);
