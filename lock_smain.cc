@@ -35,12 +35,14 @@ main(int argc, char *argv[])
 
 #ifndef RSM
   lock_server ls;
+  lock_server_cache lsc;
   rpcs server(atoi(argv[1]), count);
   server.reg(lock_protocol::stat, &ls, &lock_server::stat);
   server.reg(lock_protocol::acquire, &ls, &lock_server::acquire);
   server.reg(lock_protocol::release, &ls, &lock_server::release);
+  server.reg(lock_protocol::acquire_cache, &lsc, &lock_server_cache::acquire);
+  server.reg(lock_protocol::release_cache, &lsc, &lock_server_cache::release);
 #endif
-
 
   while(1)
     sleep(1000);

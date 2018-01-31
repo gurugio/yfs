@@ -21,10 +21,32 @@ class lock_release_user {
 
 class lock_client_cache : public lock_client {
  private:
-  class lock_release_user *lu;
-  int rlock_port;
-  std::string hostname;
-  std::string id;
+	struct local_lock {
+		int status;
+		std::string owner;
+		// why list?
+		// One client can have multiple threads
+		// and each thread can send acquire.
+		// List can keep the order of requests and save multiple requests.
+		std::list<std::string> wait_list;
+		/* pthread_mutex_t retry_lock; */
+		pthread_cond_t  retry_wait;
+		bool waiting_retry;
+	};
+	std::map<lock_protocol::lockid_t, struct local_lock *> *lock_table;
+
+	class lock_release_user *lu;
+	int rlock_port;
+	std::string hostname;
+	std::string id;
+	pthread_t lock_owner;
+	pthread_mutex_t client_lock;
+	pthread_cond_t  client_wait;
+	enum lock_status_values { LOCK_NONE, LOCK_FREE,
+				  LOCK_LOCKED, LOCK_ACQUIRING, LOCK_RELEASING };
+	bool to_release;
+	int nacquire;
+
  public:
   lock_client_cache(std::string xdst, class lock_release_user *l = 0);
   virtual ~lock_client_cache() {};
