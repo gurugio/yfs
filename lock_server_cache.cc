@@ -9,6 +9,9 @@
 #include "handle.h"
 #include "tprintf.h"
 
+#undef tprintf
+#define tprintf(args...) do {} while (0);
+
 
 lock_server_cache::lock_server_cache()
 {
@@ -29,12 +32,12 @@ int lock_server_cache::call_revoke(lock_protocol::lockid_t lid, std::string id)
 	make_sockaddr(id.c_str(), &dstsock);
 	cl = new rpcc(dstsock);
 	if (cl->bind() < 0) {
-		tprintf("lsc: %s-%llu ERROR bind for call_revoke\n", id.c_str(), lid);
+		printf("lsc: %s-%llu ERROR bind for call_revoke\n", id.c_str(), lid);
 	}
 
 	ret = cl->call(rlock_protocol::revoke, lid, r);
 	if (ret != rlock_protocol::OK)
-		tprintf("lsc: %s-%llu: ERROR call_revoke\n", id.c_str(), lid);
+		printf("lsc: %s-%llu: ERROR call_revoke\n", id.c_str(), lid);
 
 	delete cl;
 	tprintf("lsc: %s-%llu: finish call_revoke\n", id.c_str(), lid);
@@ -93,12 +96,12 @@ int lock_server_cache::call_retry(lock_protocol::lockid_t lid, std::string id)
 	make_sockaddr(id.c_str(), &dstsock);
 	cl = new rpcc(dstsock);
 	if (cl->bind() < 0) {
-		tprintf("lsc: %s-%llu: ERROR bind for call_retry\n", id.c_str(), lid);
+		printf("lsc: %s-%llu: ERROR bind for call_retry\n", id.c_str(), lid);
 	}
 
 	ret = cl->call(rlock_protocol::retry, lid, r);
 	if (ret != rlock_protocol::OK) {
-		tprintf("lsc: %s-%llu: ERROR call_retry\n", id.c_str(), lid);
+		printf("lsc: %s-%llu: ERROR call_retry\n", id.c_str(), lid);
 	}
 
 	delete cl;
