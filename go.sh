@@ -1,5 +1,5 @@
 #!/bin/bash
-export RPC_LOSSY=0
+export RPC_LOSSY=5
 for i in {0..9}; do
     ./lock_server 33333 &
     SERVER_PID=$!
