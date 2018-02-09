@@ -13,6 +13,7 @@ class extent_client {
   struct filecache {
 	  extent_protocol::attr attr;
 	  std::string buf;
+	  bool dirty;
   };
 
   std::map<extent_protocol::extentid_t, struct filecache *> *filecache_table;

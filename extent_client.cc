@@ -51,6 +51,7 @@ extent_client::get(extent_protocol::extentid_t eid, std::string &buf)
   it = filecache_table->find(eid);
   fcache = it->second;
   buf = fcache->buf;
+  fcache->dirty = false;
 
 rpc_error:
   return ret;
@@ -99,6 +100,8 @@ extent_client::put(extent_protocol::extentid_t eid, std::string buf)
 	  fcache->attr.mtime = fcache->attr.ctime = time(NULL);
 	  fcache->attr.size = buf.length();
   }
+  // put always makes filecache dirty
+  fcache->dirty = true;
 
   // step 1
   //ret = cl->call(extent_protocol::put, eid, buf, r);
