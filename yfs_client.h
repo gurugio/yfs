@@ -12,7 +12,7 @@
 		if (DEBUG) printf(__VA_ARGS__);			\
 	} while (0);
 
-class yfs_client : public lock_release_user {
+class yfs_client {
   extent_client *ec;
   lock_client_cache *lc;
  public:
@@ -61,8 +61,6 @@ class yfs_client : public lock_release_user {
   int writefile(inum, const char *, size_t, off_t);
   int readfile(inum, size_t, off_t, std::string &);
   int unlink(inum, const char *);
-
-  void dorelease(inum inum);
 };
 
 #endif 

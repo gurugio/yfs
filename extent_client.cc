@@ -13,7 +13,7 @@ extent_client::extent_client(std::string dst)
 {
   sockaddr_in dstsock;
 
-  // TODO: create a cache for attr and file-buffer
+  // todo: add pthread_mutex to protect filecache_table
   filecache_table = new std::map<extent_protocol::extentid_t, struct filecache *>;
 
   make_sockaddr(dst.c_str(), &dstsock);
@@ -137,11 +137,10 @@ extent_client::remove(extent_protocol::extentid_t eid)
   return ret;
 }
 
-void extent_client::flush(extent_protocol::extentid_t eid)
+void extent_client::dorelease(extent_protocol::extentid_t eid)
 {
   printf("ec: flush: flush cache of %016llx\n", eid);
-
-#if 0
+#if 0 // not implemented yet
   std::map<extent_protocol::extentid_t, struct filecache *>::iterator it;
   int r;
   struct filecache *fcache;

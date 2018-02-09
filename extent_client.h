@@ -6,8 +6,9 @@
 #include <string>
 #include "extent_protocol.h"
 #include "rpc.h"
+#include "lock_client_cache.h"
 
-class extent_client {
+class extent_client : public lock_release_user {
  private:
   rpcc *cl;
   struct filecache {
@@ -15,7 +16,7 @@ class extent_client {
 	  std::string buf;
 	  bool dirty;
   };
-
+  // TODO: add pthread_mutex for filecache
   std::map<extent_protocol::extentid_t, struct filecache *> *filecache_table;
 
  public:
@@ -27,7 +28,8 @@ class extent_client {
 				  extent_protocol::attr &a);
   extent_protocol::status put(extent_protocol::extentid_t eid, std::string buf);
   extent_protocol::status remove(extent_protocol::extentid_t eid);
-  void flush(extent_protocol::extentid_t eid);
+
+  void dorelease(extent_protocol::extentid_t);
 };
 
 #endif 

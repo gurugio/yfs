@@ -25,13 +25,7 @@ yfs_client::inum yfs_client::get_nextid(int isfile)
 yfs_client::yfs_client(std::string extent_dst, std::string lock_dst)
 {
 	ec = new extent_client(extent_dst);
-	lc = new lock_client_cache(lock_dst, this);
-}
-
-void yfs_client::dorelease(inum inum)
-{
-	printf("yfs:dorelease: call ec->flush\n");
-	ec->flush(inum);
+	lc = new lock_client_cache(lock_dst, ec);
 }
 
 yfs_client::inum
