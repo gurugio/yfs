@@ -10,6 +10,12 @@
 class extent_client {
  private:
   rpcc *cl;
+  struct filecache {
+	  extent_protocol::attr attr;
+	  std::string buf;
+  };
+
+  std::map<extent_protocol::extentid_t, struct filecache *> *filecache_table;
 
  public:
   extent_client(std::string dst);
