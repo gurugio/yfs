@@ -38,8 +38,13 @@ extent_client::get(extent_protocol::extentid_t eid, std::string &buf)
 		  delete fcache;
 		  goto rpc_error;
 	  }
-	  // TODO: init fcache->attr
-	  printf("ec: get: call rpc-get for %016llx buf=<%s>\n", eid, fcache->buf.c_str());
+
+	  ret = cl->call(extent_protocol::getattr, eid, fcache->attr);
+	  if (ret != extent_protocol::OK) {
+		  delete fcache;
+		  goto rpc_error;
+	  }
+
 	  filecache_table->insert(std::make_pair(eid, fcache));
   }
 
@@ -56,10 +61,18 @@ extent_client::getattr(extent_protocol::extentid_t eid,
 		       extent_protocol::attr &attr)
 {
   extent_protocol::status ret = extent_protocol::OK;
+  struct filecache *fcache;
+  std::map<extent_protocol::extentid_t, struct filecache *>::iterator it;
 
-  // TODO: keep attr in cache??
-  
-  ret = cl->call(extent_protocol::getattr, eid, attr);
+  it = filecache_table->find(eid);
+  if (it == filecache_table->end()) {
+	  return extent_protocol::NOENT;
+  }
+
+  fcache = it->second;
+  attr = fcache->attr;
+  // step 1
+  //ret = cl->call(extent_protocol::getattr, eid, attr);
   return ret;
 }
 
@@ -68,7 +81,7 @@ extent_client::put(extent_protocol::extentid_t eid, std::string buf)
 {
   extent_protocol::status ret = extent_protocol::OK;
   std::map<extent_protocol::extentid_t, struct filecache *>::iterator it;
-  int r;
+  //int r; step 1
   struct filecache *fcache;
 
   it = filecache_table->find(eid);
@@ -76,17 +89,19 @@ extent_client::put(extent_protocol::extentid_t eid, std::string buf)
 	  printf("ec: put: create cache for %016llx\n", eid);
 	  fcache = new filecache;
 	  fcache->buf = buf;
-	  // TODO: init fcache->attr
+	  fcache->attr.mtime = fcache->attr.ctime = fcache->attr.atime = time(NULL);
+	  fcache->attr.size = 0;
 	  filecache_table->insert(std::make_pair(eid, fcache));
   } else {
 	  printf("ec: put: change cache for %016llx\n", eid);
 	  fcache = it->second;
 	  fcache->buf = buf;
-	  // TODO: init fcache->attr
+	  fcache->attr.mtime = fcache->attr.ctime = time(NULL);
+	  fcache->attr.size = buf.length();
   }
 
   // step 1
-  ret = cl->call(extent_protocol::put, eid, buf, r);
+  //ret = cl->call(extent_protocol::put, eid, buf, r);
   return ret;
 }
 
@@ -97,6 +112,7 @@ extent_client::remove(extent_protocol::extentid_t eid)
   std::map<extent_protocol::extentid_t, struct filecache *>::iterator it;
   int r;
   struct filecache *fcache;
+  extent_protocol::attr attr;
 
   it = filecache_table->find(eid);
   if (it == filecache_table->end()) {
@@ -107,8 +123,14 @@ extent_client::remove(extent_protocol::extentid_t eid)
   fcache = it->second;
   filecache_table->erase(it);
   delete fcache;
-  
-  ret = cl->call(extent_protocol::remove, eid, r);
+
+  // server data also should be removed if server has data
+  ret = cl->call(extent_protocol::getattr, eid, attr);
+  if (ret == extent_protocol::OK)
+	  ret = cl->call(extent_protocol::remove, eid, r);
+  else
+	  ret = extent_protocol::OK; // no need to call remove-rpc
+
   return ret;
 }
 
