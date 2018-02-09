@@ -49,6 +49,7 @@ int extent_server::put(extent_protocol::extentid_t id, std::string buf, int &)
 		f->file_name = buf;
 		f->file_attr.ctime = f->file_attr.mtime =
 			f->file_attr.atime = time(NULL);
+		// BUGBUG: what 0? not buf.length()?
 		f->file_attr.size = 0;
 		file_map->insert(std::make_pair(id, f));
 	}
@@ -124,7 +125,7 @@ int extent_server::remove(extent_protocol::extentid_t id, int &)
 	f = it->second;
 
 	file_map->erase(it);
-	free(f);
+	delete f;
 
 	printf("es:remove: done\n");
 
