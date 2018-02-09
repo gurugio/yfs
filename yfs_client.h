@@ -12,9 +12,9 @@
 		if (DEBUG) printf(__VA_ARGS__);			\
 	} while (0);
 
-class yfs_client {
+class yfs_client : public lock_release_user {
   extent_client *ec;
-  lock_client *lc;
+  lock_client_cache *lc;
  public:
 
   typedef unsigned long long inum;
@@ -61,6 +61,8 @@ class yfs_client {
   int writefile(inum, const char *, size_t, off_t);
   int readfile(inum, size_t, off_t, std::string &);
   int unlink(inum, const char *);
+
+  void dorelease(inum inum);
 };
 
 #endif 

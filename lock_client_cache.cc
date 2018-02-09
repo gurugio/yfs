@@ -160,6 +160,7 @@ lock_client_cache::release(lock_protocol::lockid_t lid)
 		tprintf("lcc: %s-%llu: call RPC-release\n", id.c_str(), lid);
 		pthread_mutex_unlock(&client_lock);
 
+		lu->dorelease(lid);
 		ret = cl->call(lock_protocol::release_cache, lid, id, r);
 		VERIFY(ret == lock_protocol::OK);
 
@@ -215,6 +216,7 @@ lock_client_cache::revoke_handler(lock_protocol::lockid_t lid,
 		tprintf("lcc: %s-%llu: release to server\n", id.c_str(), lid);
 		pthread_mutex_unlock(&client_lock);
 
+		lu->dorelease(lid);
 		ret = cl->call(lock_protocol::release_cache, lid, id, r);
 		VERIFY(ret == lock_protocol::OK);
 

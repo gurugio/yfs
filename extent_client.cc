@@ -137,4 +137,28 @@ extent_client::remove(extent_protocol::extentid_t eid)
   return ret;
 }
 
+void extent_client::flush(extent_protocol::extentid_t eid)
+{
+  printf("ec: flush: flush cache of %016llx\n", eid);
 
+#if 0
+  std::map<extent_protocol::extentid_t, struct filecache *>::iterator it;
+  int r;
+  struct filecache *fcache;
+
+  it = filecache_table->find(eid);
+  if (it == filecache_table->end()) {
+	  return;
+  }
+
+  fcache = it->second;
+
+  // put-rpc only-if cache is dirty
+  if (fcache->dirty) {
+	  // do not care error
+	  cl->call(extent_protocol::put, eid, fcache->buf, r);
+  }
+  filecache_table->erase(it);
+  delete fcache;
+#endif
+}
