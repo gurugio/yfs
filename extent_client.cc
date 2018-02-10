@@ -23,6 +23,42 @@ extent_client::extent_client(std::string dst)
   }
 }
 
+extent_client::filecache *
+extent_client::create_filecache(extent_protocol::extentid_t eid)
+{
+	extent_protocol::status ret = extent_protocol::OK;
+	struct filecache *fcache;
+	std::map<extent_protocol::extentid_t, struct filecache *>::iterator it;
+
+	fcache = new filecache;
+
+	ret = cl->call(extent_protocol::get, eid, fcache->buf);
+	if (ret == extent_protocol::OK) {
+		// file exists in extent server
+		printf("ec: create: get from server eid=%016llX\n", eid);
+		ret = cl->call(extent_protocol::getattr, eid, fcache->attr);
+		if (ret != extent_protocol::OK)
+			goto rpc_error;
+	} else if (ret == extent_protocol::NOENT) {
+		// create new filecache
+		printf("ec: create: new cache eid=%016llX\n", eid);
+		fcache->buf = "";
+		fcache->attr.mtime =
+			fcache->attr.ctime =
+			fcache->attr.atime = time(NULL);
+		fcache->attr.size = 0;
+	} else {
+		goto rpc_error;
+	}
+
+	fcache->status = extent_client::CLEAN;
+	filecache_table->insert(std::make_pair(eid, fcache));
+	return fcache;
+rpc_error:
+	delete fcache;
+	return NULL;
+}
+
 extent_protocol::status
 extent_client::get(extent_protocol::extentid_t eid, std::string &buf)
 {
@@ -30,34 +66,27 @@ extent_client::get(extent_protocol::extentid_t eid, std::string &buf)
   struct filecache *fcache;
   std::map<extent_protocol::extentid_t, struct filecache *>::iterator it;
 
+  printf("ec: get: eid=%016llX\n", eid);
+
   it = filecache_table->find(eid);
   if (it == filecache_table->end()) {
-	  fcache = new filecache;
-	  ret = cl->call(extent_protocol::get, eid, fcache->buf);
-	  if (ret != extent_protocol::OK) {
-		  delete fcache;
+	  fcache = create_filecache(eid);
+	  if (!fcache) {
+		  ret = extent_protocol::NOENT;
 		  goto rpc_error;
 	  }
-
-	  ret = cl->call(extent_protocol::getattr, eid, fcache->attr);
-	  if (ret != extent_protocol::OK) {
-		  delete fcache;
-		  goto rpc_error;
-	  }
-
-	  filecache_table->insert(std::make_pair(eid, fcache));
+  } else {
+	  it = filecache_table->find(eid);
+	  fcache = it->second;
   }
 
-  it = filecache_table->find(eid);
-  fcache = it->second;
-
-  if (fcache->status == extent_client::REMOVED) {
+  if (fcache->status == REMOVED) {
+	  printf("ec: get: removed eid=%016llX\n", eid);
 	  ret = extent_protocol::NOENT;
 	  goto rpc_error;
   }
 
   buf = fcache->buf;
-  fcache->status = extent_client::CLEAN;
 
 rpc_error:
   return ret;
@@ -71,16 +100,28 @@ extent_client::getattr(extent_protocol::extentid_t eid,
   struct filecache *fcache;
   std::map<extent_protocol::extentid_t, struct filecache *>::iterator it;
 
+  printf("ec: getattr: eid=%016llX\n", eid);
+
   it = filecache_table->find(eid);
   if (it == filecache_table->end()) {
-	  return extent_protocol::NOENT;
+	  fcache = create_filecache(eid);
+	  if (!fcache) {
+		  ret = extent_protocol::NOENT;
+		  goto rpc_error;
+	  }
+  } else {
+	  it = filecache_table->find(eid);
+	  fcache = it->second;
   }
 
-  fcache = it->second;
-  if (fcache->status == REMOVED)
-	  return extent_protocol::NOENT;
+  if (fcache->status == REMOVED) {
+	  printf("ec: get: removed eid=%016llX\n", eid);
+	  ret = extent_protocol::NOENT;
+	  goto rpc_error;
+  }
 
   attr = fcache->attr;
+rpc_error:
   return ret;
 }
 
@@ -94,6 +135,8 @@ extent_client::put(extent_protocol::extentid_t eid, std::string buf)
 
   it = filecache_table->find(eid);
   if (it == filecache_table->end()) {
+	  // no need to get data from extent server
+	  // because it will be over-written later
 	  printf("ec: put: create cache for %016llx\n", eid);
 	  fcache = new filecache;
 	  fcache->buf = buf;
