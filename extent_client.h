@@ -20,6 +20,7 @@ class extent_client : public lock_release_user {
   };
   // TODO: add pthread_mutex for filecache
   std::map<extent_protocol::extentid_t, struct filecache *> *filecache_table;
+  pthread_mutex_t filecache_lock;
 
  public:
   extent_client(std::string dst);
@@ -32,7 +33,8 @@ class extent_client : public lock_release_user {
   extent_protocol::status remove(extent_protocol::extentid_t eid);
 
   struct filecache *create_filecache(extent_protocol::extentid_t);
-  extent_protocol::status flush(extent_protocol::extentid_t);
+  extent_protocol::status flush(extent_protocol::extentid_t,
+								struct filecache *);
   void dorelease(extent_protocol::extentid_t);
 };
 

@@ -15,6 +15,7 @@ extent_client::extent_client(std::string dst)
 
   // todo: add pthread_mutex to protect filecache_table
   filecache_table = new std::map<extent_protocol::extentid_t, struct filecache *>;
+  pthread_mutex_init(&filecache_lock, NULL);
 
   make_sockaddr(dst.c_str(), &dstsock);
   cl = new rpcc(dstsock);
@@ -52,7 +53,6 @@ extent_client::create_filecache(extent_protocol::extentid_t eid)
 	}
 
 	fcache->status = extent_client::CLEAN;
-	filecache_table->insert(std::make_pair(eid, fcache));
 	return fcache;
 rpc_error:
 	delete fcache;
@@ -68,13 +68,18 @@ extent_client::get(extent_protocol::extentid_t eid, std::string &buf)
 
   printf("ec: get: eid=%016llX\n", eid);
 
+  pthread_mutex_lock(&filecache_lock);
+
   it = filecache_table->find(eid);
   if (it == filecache_table->end()) {
+	  pthread_mutex_unlock(&filecache_lock);
 	  fcache = create_filecache(eid);
 	  if (!fcache) {
 		  ret = extent_protocol::NOENT;
 		  goto rpc_error;
 	  }
+	  pthread_mutex_lock(&filecache_lock);
+	  filecache_table->insert(std::make_pair(eid, fcache));
   } else {
 	  it = filecache_table->find(eid);
 	  fcache = it->second;
@@ -89,6 +94,7 @@ extent_client::get(extent_protocol::extentid_t eid, std::string &buf)
   buf = fcache->buf;
 
 rpc_error:
+  pthread_mutex_unlock(&filecache_lock);
   return ret;
 }
 
@@ -102,13 +108,18 @@ extent_client::getattr(extent_protocol::extentid_t eid,
 
   printf("ec: getattr: eid=%016llX\n", eid);
 
+  pthread_mutex_lock(&filecache_lock);
+
   it = filecache_table->find(eid);
   if (it == filecache_table->end()) {
+	  pthread_mutex_unlock(&filecache_lock);
 	  fcache = create_filecache(eid);
 	  if (!fcache) {
 		  ret = extent_protocol::NOENT;
 		  goto rpc_error;
 	  }
+	  pthread_mutex_lock(&filecache_lock);
+	  filecache_table->insert(std::make_pair(eid, fcache));
   } else {
 	  it = filecache_table->find(eid);
 	  fcache = it->second;
@@ -121,7 +132,9 @@ extent_client::getattr(extent_protocol::extentid_t eid,
   }
 
   attr = fcache->attr;
+
 rpc_error:
+  pthread_mutex_unlock(&filecache_lock);
   return ret;
 }
 
@@ -132,6 +145,8 @@ extent_client::put(extent_protocol::extentid_t eid, std::string buf)
   std::map<extent_protocol::extentid_t, struct filecache *>::iterator it;
   //int r; step 1
   struct filecache *fcache;
+
+  pthread_mutex_lock(&filecache_lock);
 
   it = filecache_table->find(eid);
   if (it == filecache_table->end()) {
@@ -158,6 +173,7 @@ extent_client::put(extent_protocol::extentid_t eid, std::string buf)
   }
   // put always makes filecache dirty
   fcache->status = extent_client::DIRTY;
+  pthread_mutex_unlock(&filecache_lock);
   return ret;
 }
 
@@ -167,8 +183,11 @@ extent_client::remove(extent_protocol::extentid_t eid)
   std::map<extent_protocol::extentid_t, struct filecache *>::iterator it;
   struct filecache *fcache;
 
+  pthread_mutex_lock(&filecache_lock);
+
   it = filecache_table->find(eid);
   if (it == filecache_table->end()) {
+	  pthread_mutex_unlock(&filecache_lock);
 	  return extent_protocol::OK; // already removed?
   }
 
@@ -176,25 +195,20 @@ extent_client::remove(extent_protocol::extentid_t eid)
   // what happens if removed cache is created or accessed?
   fcache->status = extent_client::REMOVED;
   fcache->buf = "";
+
+  pthread_mutex_unlock(&filecache_lock);
   return extent_protocol::OK;
 }
 
 extent_protocol::status
-extent_client::flush(extent_protocol::extentid_t eid)
+extent_client::flush(extent_protocol::extentid_t eid,
+					 struct filecache *fcache)
 {
-  std::map<extent_protocol::extentid_t, struct filecache *>::iterator it;
-  struct filecache *fcache;
   extent_protocol::status ret = extent_protocol::OK;
   int r;
 
   printf("ec: flush: flush cache of %016llx\n", eid);
 
-  it = filecache_table->find(eid);
-  if (it == filecache_table->end()) {
-	  return extent_protocol::NOENT;
-  }
-
-  fcache = it->second;
   if (fcache->status == extent_client::DIRTY) {
 	  printf("ec: flush: flush dirty cache of %016llx\n", eid);
 	  ret = cl->call(extent_protocol::put, eid, fcache->buf, r);
@@ -218,14 +232,17 @@ void extent_client::dorelease(extent_protocol::extentid_t eid)
 
   printf("ec: [dorelease]: flush and remove cache of %016llx\n", eid);
 
+  pthread_mutex_lock(&filecache_lock);
   it = filecache_table->find(eid);
   if (it == filecache_table->end()) {
+	  pthread_mutex_unlock(&filecache_lock);
 	  return;
   }
 
-  (void)flush(eid);
-
   fcache = it->second;
   filecache_table->erase(it);
+  pthread_mutex_unlock(&filecache_lock);
+
+  (void)flush(eid, fcache);
   delete fcache;
 }
