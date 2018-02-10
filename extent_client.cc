@@ -50,8 +50,14 @@ extent_client::get(extent_protocol::extentid_t eid, std::string &buf)
 
   it = filecache_table->find(eid);
   fcache = it->second;
+
+  if (fcache->status == extent_client::REMOVED) {
+	  ret = extent_protocol::NOENT;
+	  goto rpc_error;
+  }
+
   buf = fcache->buf;
-  fcache->dirty = false;
+  fcache->status = extent_client::CLEAN;
 
 rpc_error:
   return ret;
@@ -71,9 +77,10 @@ extent_client::getattr(extent_protocol::extentid_t eid,
   }
 
   fcache = it->second;
+  if (fcache->status == REMOVED)
+	  return extent_protocol::NOENT;
+
   attr = fcache->attr;
-  // step 1
-  //ret = cl->call(extent_protocol::getattr, eid, attr);
   return ret;
 }
 
@@ -98,66 +105,84 @@ extent_client::put(extent_protocol::extentid_t eid, std::string buf)
 	  fcache = it->second;
 	  fcache->buf = buf;
 	  fcache->attr.mtime = fcache->attr.ctime = time(NULL);
+	  // if a file/dir is removed and the same i-number file/dir is created,
+	  // atime also should be changed.
+	  if (fcache->status == REMOVED) {
+		  printf("ec: put: chage removed cache\n");
+		  fcache->attr.atime = time(NULL);
+	  }
 	  fcache->attr.size = buf.length();
   }
   // put always makes filecache dirty
-  fcache->dirty = true;
-
-  // step 1
-  //ret = cl->call(extent_protocol::put, eid, buf, r);
+  fcache->status = extent_client::DIRTY;
   return ret;
 }
 
 extent_protocol::status
 extent_client::remove(extent_protocol::extentid_t eid)
 {
-  extent_protocol::status ret = extent_protocol::OK;
   std::map<extent_protocol::extentid_t, struct filecache *>::iterator it;
-  int r;
   struct filecache *fcache;
-  extent_protocol::attr attr;
 
   it = filecache_table->find(eid);
   if (it == filecache_table->end()) {
 	  return extent_protocol::NOENT;
   }
 
-  it = filecache_table->find(eid);
   fcache = it->second;
-  filecache_table->erase(it);
-  delete fcache;
+  // what happens if removed cache is created or accessed?
+  fcache->status = extent_client::REMOVED;
+  fcache->buf = "";
+  return extent_protocol::OK;
+}
 
-  // server data also should be removed if server has data
-  ret = cl->call(extent_protocol::getattr, eid, attr);
-  if (ret == extent_protocol::OK)
+extent_protocol::status
+extent_client::flush(extent_protocol::extentid_t eid)
+{
+  std::map<extent_protocol::extentid_t, struct filecache *>::iterator it;
+  struct filecache *fcache;
+  extent_protocol::status ret = extent_protocol::OK;
+  int r;
+
+  printf("ec: flush: flush cache of %016llx\n", eid);
+
+  it = filecache_table->find(eid);
+  if (it == filecache_table->end()) {
+	  return extent_protocol::NOENT;
+  }
+
+  fcache = it->second;
+  if (fcache->status == extent_client::DIRTY) {
+	  printf("ec: flush: flush dirty cache of %016llx\n", eid);
+	  ret = cl->call(extent_protocol::put, eid, fcache->buf, r);
+	  if (ret != extent_protocol::OK)
+		  goto rpc_error; // BUGBUG: exit or ignore?
+  } else if (fcache->status == extent_client::REMOVED) {
+	  printf("ec: flush: remove extent in server of %016llx\n", eid);
 	  ret = cl->call(extent_protocol::remove, eid, r);
-  else
-	  ret = extent_protocol::OK; // no need to call remove-rpc
+	  if (ret != extent_protocol::OK)
+		  goto rpc_error; // BUGBUG: exit or ignore?
+  }
 
+rpc_error:
   return ret;
 }
 
 void extent_client::dorelease(extent_protocol::extentid_t eid)
 {
-  printf("ec: flush: flush cache of %016llx\n", eid);
-#if 0 // not implemented yet
   std::map<extent_protocol::extentid_t, struct filecache *>::iterator it;
-  int r;
   struct filecache *fcache;
+
+  printf("ec: [dorelease]: flush and remove cache of %016llx\n", eid);
 
   it = filecache_table->find(eid);
   if (it == filecache_table->end()) {
 	  return;
   }
 
-  fcache = it->second;
+  (void)flush(eid);
 
-  // put-rpc only-if cache is dirty
-  if (fcache->dirty) {
-	  // do not care error
-	  cl->call(extent_protocol::put, eid, fcache->buf, r);
-  }
+  fcache = it->second;
   filecache_table->erase(it);
   delete fcache;
-#endif
 }

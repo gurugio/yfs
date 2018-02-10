@@ -11,10 +11,12 @@
 class extent_client : public lock_release_user {
  private:
   rpcc *cl;
+  enum cachestatus { CLEAN, DIRTY, REMOVED };
+
   struct filecache {
 	  extent_protocol::attr attr;
 	  std::string buf;
-	  bool dirty;
+	  int status;
   };
   // TODO: add pthread_mutex for filecache
   std::map<extent_protocol::extentid_t, struct filecache *> *filecache_table;
@@ -29,6 +31,7 @@ class extent_client : public lock_release_user {
   extent_protocol::status put(extent_protocol::extentid_t eid, std::string buf);
   extent_protocol::status remove(extent_protocol::extentid_t eid);
 
+  extent_protocol::status flush(extent_protocol::extentid_t);
   void dorelease(extent_protocol::extentid_t);
 };
 
