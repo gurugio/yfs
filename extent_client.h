@@ -11,7 +11,7 @@
 class extent_client : public lock_release_user {
  private:
   rpcc *cl;
-  enum cachestatus { CLEAN, DIRTY, REMOVED };
+  enum cachestatus { FCACHE_CLEAN, FCACHE_DIRTY, FCACHE_REMOVED };
 
   struct filecache {
 	  extent_protocol::attr attr;

@@ -36,16 +36,19 @@ extent_client::create_filecache(extent_protocol::extentid_t eid)
 	ret = cl->call(extent_protocol::get, eid, fcache->buf);
 	if (ret == extent_protocol::OK) {
 		// file exists in extent server
-		printf("ec: create: get from server eid=%016llX\n", eid);
+		printf("ec: create: get from server eid=%016llX <%s>\n",
+			   eid, fcache->buf.c_str());
 		ret = cl->call(extent_protocol::getattr, eid, fcache->attr);
 		if (ret != extent_protocol::OK)
 			goto rpc_error;
+		printf("ec: create: getattr from server eid=%016llX <%d>\n",
+			   eid, fcache->attr.size);
 	} else {
 		// cannot create file-cache if file does not exist
 		goto rpc_error;
 	}
 
-	fcache->status = extent_client::CLEAN;
+	fcache->status = FCACHE_CLEAN;
 	return fcache;
 rpc_error:
 	delete fcache;
@@ -76,12 +79,9 @@ extent_client::get(extent_protocol::extentid_t eid, std::string &buf)
   } else {
 	  it = filecache_table->find(eid);
 	  fcache = it->second;
-	  printf("ec: get: found cache: size=%d buf-len=%d\n",
-			 (int)fcache->attr.size,
-			 (int)fcache->buf.size());
   }
 
-  if (fcache->status == REMOVED) {
+  if (fcache->status == FCACHE_REMOVED) {
 	  printf("ec: get: removed eid=%016llX\n", eid);
 	  ret = extent_protocol::NOENT;
 	  goto remove_error;
@@ -122,7 +122,7 @@ extent_client::getattr(extent_protocol::extentid_t eid,
 	  fcache = it->second;
   }
 
-  if (fcache->status == REMOVED) {
+  if (fcache->status == FCACHE_REMOVED) {
 	  printf("ec: get: removed eid=%016llX\n", eid);
 	  ret = extent_protocol::NOENT;
 	  goto rpc_error;
@@ -153,7 +153,7 @@ extent_client::put(extent_protocol::extentid_t eid, std::string buf)
 	  fcache = new filecache;
 	  fcache->buf = buf;
 	  fcache->attr.mtime = fcache->attr.ctime = fcache->attr.atime = time(NULL);
-	  fcache->attr.size = 0;
+	  fcache->attr.size = buf.length();
 	  filecache_table->insert(std::make_pair(eid, fcache));
   } else {
 	  printf("ec: put: change cache for %016llx\n", eid);
@@ -162,14 +162,14 @@ extent_client::put(extent_protocol::extentid_t eid, std::string buf)
 	  fcache->attr.mtime = fcache->attr.ctime = time(NULL);
 	  // if a file/dir is removed and the same i-number file/dir is created,
 	  // atime also should be changed.
-	  if (fcache->status == REMOVED) {
+	  if (fcache->status == FCACHE_REMOVED) {
 		  printf("ec: put: chage removed cache\n");
 		  fcache->attr.atime = time(NULL);
 	  }
 	  fcache->attr.size = buf.length();
   }
   // put always makes filecache dirty
-  fcache->status = extent_client::DIRTY;
+  fcache->status = FCACHE_DIRTY;
   pthread_mutex_unlock(&filecache_lock);
   return ret;
 }
@@ -190,7 +190,7 @@ extent_client::remove(extent_protocol::extentid_t eid)
 
   fcache = it->second;
   // what happens if removed cache is created or accessed?
-  fcache->status = extent_client::REMOVED;
+  fcache->status = FCACHE_REMOVED;
   fcache->buf = "";
 
   pthread_mutex_unlock(&filecache_lock);
@@ -206,13 +206,11 @@ extent_client::flush(extent_protocol::extentid_t eid,
 
   printf("ec: flush: flush cache of %016llx\n", eid);
 
-  if (fcache->status == extent_client::DIRTY) {
-	  printf("ec: flush: flush dirty cache of %016llx\n", eid);
+  if (fcache->status == FCACHE_DIRTY) {
 	  ret = cl->call(extent_protocol::put, eid, fcache->buf, r);
 	  if (ret != extent_protocol::OK)
 		  goto rpc_error; // BUGBUG: exit or ignore?
-  } else if (fcache->status == extent_client::REMOVED) {
-	  printf("ec: flush: remove extent in server of %016llx\n", eid);
+  } else if (fcache->status == FCACHE_REMOVED) {
 	  ret = cl->call(extent_protocol::remove, eid, r);
 	  if (ret != extent_protocol::OK)
 		  goto rpc_error; // BUGBUG: exit or ignore?
@@ -227,7 +225,7 @@ void extent_client::dorelease(extent_protocol::extentid_t eid)
   std::map<extent_protocol::extentid_t, struct filecache *>::iterator it;
   struct filecache *fcache;
 
-  printf("ec: [ dorelease ]: flush and remove cache of %016llx\n", eid);
+  printf("ec: dorelease: flush and remove cache of %016llx\n", eid);
 
   pthread_mutex_lock(&filecache_lock);
   it = filecache_table->find(eid);
