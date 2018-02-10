@@ -8,7 +8,7 @@
 #include <sys/epoll.h>
 #endif
 
-#define MAX_POLL_FDS 512
+#define MAX_POLL_FDS 1024
 
 typedef enum {
 	CB_NONE = 0x0,
