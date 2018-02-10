@@ -40,15 +40,8 @@ extent_client::create_filecache(extent_protocol::extentid_t eid)
 		ret = cl->call(extent_protocol::getattr, eid, fcache->attr);
 		if (ret != extent_protocol::OK)
 			goto rpc_error;
-	} else if (ret == extent_protocol::NOENT) {
-		// create new filecache
-		printf("ec: create: new cache eid=%016llX\n", eid);
-		fcache->buf = "";
-		fcache->attr.mtime =
-			fcache->attr.ctime =
-			fcache->attr.atime = time(NULL);
-		fcache->attr.size = 0;
 	} else {
+		// cannot create file-cache if file does not exist
 		goto rpc_error;
 	}
 
@@ -76,25 +69,29 @@ extent_client::get(extent_protocol::extentid_t eid, std::string &buf)
 	  fcache = create_filecache(eid);
 	  if (!fcache) {
 		  ret = extent_protocol::NOENT;
-		  goto rpc_error;
+		  goto create_error;
 	  }
 	  pthread_mutex_lock(&filecache_lock);
 	  filecache_table->insert(std::make_pair(eid, fcache));
   } else {
 	  it = filecache_table->find(eid);
 	  fcache = it->second;
+	  printf("ec: get: found cache: size=%d buf-len=%d\n",
+			 (int)fcache->attr.size,
+			 (int)fcache->buf.size());
   }
 
   if (fcache->status == REMOVED) {
 	  printf("ec: get: removed eid=%016llX\n", eid);
 	  ret = extent_protocol::NOENT;
-	  goto rpc_error;
+	  goto remove_error;
   }
 
   buf = fcache->buf;
 
-rpc_error:
+remove_error:
   pthread_mutex_unlock(&filecache_lock);
+create_error:
   return ret;
 }
 
@@ -230,7 +227,7 @@ void extent_client::dorelease(extent_protocol::extentid_t eid)
   std::map<extent_protocol::extentid_t, struct filecache *>::iterator it;
   struct filecache *fcache;
 
-  printf("ec: [dorelease]: flush and remove cache of %016llx\n", eid);
+  printf("ec: [ dorelease ]: flush and remove cache of %016llx\n", eid);
 
   pthread_mutex_lock(&filecache_lock);
   it = filecache_table->find(eid);
