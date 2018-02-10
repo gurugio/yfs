@@ -169,7 +169,7 @@ extent_client::remove(extent_protocol::extentid_t eid)
 
   it = filecache_table->find(eid);
   if (it == filecache_table->end()) {
-	  return extent_protocol::NOENT;
+	  return extent_protocol::OK; // already removed?
   }
 
   fcache = it->second;
