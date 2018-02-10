@@ -138,6 +138,11 @@ lock_server_cache::release(lock_protocol::lockid_t lid, std::string id,
 
 		call_retry(lid, next_owner);
 
+		// If there are more waiting clients,
+		// new owner will release lock ASAP.
+		if (!llock->wait_list.empty())
+			call_revoke(lid, next_owner);
+
 		pthread_mutex_lock(&server_lock);
 	}
 
